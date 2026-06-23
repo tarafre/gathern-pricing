@@ -1,0 +1,41 @@
+name: Gathern Pricing
+
+on:
+  schedule:
+    # كل ساعة من 8 صباحاً حتى 8 مساءً UTC = 11 صباحاً حتى 11 مساءً بتوقيت السعودية
+    - cron: '0 8-20 * * *'
+  workflow_dispatch:  # تشغيل يدوي من GitHub عند الحاجة
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      GATHERN_PHONE:      ${{ secrets.GATHERN_PHONE }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+      DISPLAY: ':99'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright requests
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Start virtual display
+        run: |
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+
+      - name: Run pricing tool
+        run: python pricing.py
