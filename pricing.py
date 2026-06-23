@@ -400,15 +400,26 @@ def main():
             browser.close()
             return
 
+        # خريطة تخفيض الاستراتيجية عند المساء (درجة واحدة للأسفل)
+        EVENING_DOWNGRADE = {
+            "high_plus": "high",
+            "high":      "mid",
+            "mid":       "low",
+            "low":       "low_extra",
+            "low_extra": "low_extra",
+        }
+
         results = []
         updated_count = 0
-        strategy_map = EVENING_STRATEGY if is_evening else DEFAULT_STRATEGY
 
         for unit in UNITS:
             uid = unit["unit_id"]
             utype = unit["type"]
-            # override يأخذ الأولوية على الاستراتيجية التلقائية
-            strategy = overrides.get(uid) or strategy_map.get(utype, "mid")
+            # الاستراتيجية الأساسية: override أو الافتراضي حسب النوع
+            strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "mid")
+            # عند المساء: ننزّل درجة واحدة تلقائياً
+            if is_evening:
+                strategy = EVENING_DOWNGRADE.get(strategy, "low")
             base = std_avg if "استديو" in utype else apt_avg
             price = calc_price(base, strategy)
             success = update_price(business_page, unit, price, today)
