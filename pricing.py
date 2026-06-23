@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import os, time, re, statistics, requests
+import os, time, re, statistics, requests, json, csv
 from datetime import datetime
 from playwright.sync_api import sync_playwright
 
@@ -12,6 +12,22 @@ if os.path.exists(_env_file):
         if _line and not _line.startswith("#") and "=" in _line:
             _k, _v = _line.split("=", 1)
             os.environ.setdefault(_k.strip(), _v.strip())
+
+BASE_DIR = os.path.dirname(__file__)
+
+def load_runtime_config():
+    path = os.path.join(BASE_DIR, "runtime_config.json")
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_history(today, now_str, apt_avg, std_avg, apt_count, std_count, updated, total):
+    path = os.path.join(BASE_DIR, "data", "history.csv")
+    is_new = not os.path.exists(path)
+    with open(path, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if is_new:
+            w.writerow(["date","time","apt_avg","studio_avg","apt_count","studio_count","updated","total"])
+        w.writerow([today, now_str, apt_avg, std_avg, apt_count, std_count, updated, total])
 
 from config import *
 
@@ -302,14 +318,24 @@ def update_price(page, unit, price, today):
         return False
 
 def main():
+    cfg = load_runtime_config()
+    start_hour   = cfg.get("start_hour",   START_HOUR)
+    end_hour     = cfg.get("end_hour",     END_HOUR)
+    evening_hour = cfg.get("evening_hour", EVENING_HOUR)
+    overrides    = cfg.get("unit_overrides", {})
+
     now = datetime.now()
     hour = now.hour
     today = now.strftime("%Y-%m-%d")
-    print(f"تشغيل الاداة {now.strftime('%H:%M')} {today}")
-    if hour < START_HOUR or hour > END_HOUR:
-        print("خارج ساعات التشغيل")
+    now_str = now.strftime("%H:%M")
+    print(f"تشغيل الاداة {now_str} {today}")
+
+    if hour < start_hour or hour > end_hour:
+        print(f"خارج ساعات التشغيل ({start_hour}:00 - {end_hour}:00)")
         return
-    is_evening = hour >= EVENING_HOUR
+
+    is_evening = hour >= evening_hour
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         context = browser.new_context()
@@ -328,21 +354,36 @@ def main():
             send_telegram("فشل تسجيل الدخول!")
             browser.close()
             return
+
         results = []
+        updated_count = 0
         strategy_map = EVENING_STRATEGY if is_evening else DEFAULT_STRATEGY
+
         for unit in UNITS:
+            uid = unit["unit_id"]
             utype = unit["type"]
-            strategy = strategy_map.get(utype, "mid")
+            # override يأخذ الأولوية على الاستراتيجية التلقائية
+            strategy = overrides.get(uid) or strategy_map.get(utype, "mid")
             base = std_avg if "استديو" in utype else apt_avg
             price = calc_price(base, strategy)
             success = update_price(business_page, unit, price, today)
             if success:
-                results.append(f"{unit['name']} -> {price} ر.س ({strategy})")
+                updated_count += 1
+                results.append(f"✅ {unit['name']} ← {price} ر.س ({strategy})")
             else:
-                results.append(f"{unit['name']} محجوزة")
-        time_label = "مساء" if is_evening else now.strftime('%H:%M')
-        msg = f"تحديث {time_label}\nمتوسط الشقق: {apt_avg} | الاستديوهات: {std_avg}\n\n"
-        msg += "\n".join(results)
+                results.append(f"⏭️ {unit['name']} ← محجوزة")
+
+        save_history(today, now_str, apt_avg, std_avg,
+                     len(apt_prices), len(studio_prices),
+                     updated_count, len(UNITS))
+
+        time_label = "مساء" if is_evening else now_str
+        sep = "━━━━━━━━━━━━━━━"
+        msg = (f"📊 تحديث {time_label}\n{sep}\n"
+               f"وسيط الشقق: {apt_avg} ر.س\n"
+               f"وسيط الاستديوهات: {std_avg} ر.س\n{sep}\n"
+               + "\n".join(results)
+               + f"\n{sep}\nتم تحديث {updated_count}/{len(UNITS)} وحدة")
         send_telegram(msg)
         print("انتهى التحديث!")
         browser.close()
