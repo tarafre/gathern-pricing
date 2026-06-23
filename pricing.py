@@ -366,7 +366,10 @@ def main():
     evening_hour = cfg.get("evening_hour", EVENING_HOUR)
     overrides    = cfg.get("unit_overrides", {})
 
-    now = datetime.now()
+    from datetime import timezone, timedelta
+    utc_now = datetime.now(timezone.utc)
+    ksa_now = utc_now + timedelta(hours=3)
+    now = ksa_now
     hour = now.hour
     today = now.strftime("%Y-%m-%d")
     now_str = now.strftime("%H:%M")
