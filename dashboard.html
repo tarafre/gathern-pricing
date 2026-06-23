@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ترف للتسعير</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f5f7;--surface:#ffffff;--border:#e5e5ea;
+  --text:#1c1c1e;--muted:#8e8e93;--accent:#4f46e5;
+  --green:#10b981;--amber:#f59e0b;--red:#ef4444;--blue:#3b82f6;
+  --tab-h:60px;--head-h:56px;
+}
+body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* Header */
+.header{position:fixed;top:0;left:0;right:0;height:var(--head-h);background:rgba(255,255,255,.92);backdrop-filter:blur(12px);border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:100}
+.header-title{font-size:17px;font-weight:700;color:var(--text)}
+.header-sub{font-size:11px;color:var(--muted)}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite;margin-left:5px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.token-btn{font-size:12px;padding:5px 10px;border:0.5px solid var(--border);border-radius:8px;background:transparent;color:var(--muted);cursor:pointer}
+
+/* Tabs */
+.tabs{position:fixed;bottom:0;left:0;right:0;height:var(--tab-h);background:rgba(255,255,255,.95);backdrop-filter:blur(12px);border-top:0.5px solid var(--border);display:flex;z-index:100}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;transition:color .15s;color:var(--muted);border:none;background:none}
+.tab.active{color:var(--accent)}
+.tab-icon{font-size:22px}
+.tab-lbl{font-size:10px;font-weight:500}
+
+/* Pages */
+.page{display:none;padding:calc(var(--head-h) + 12px) 14px calc(var(--tab-h) + 20px);min-height:100vh}
+.page.active{display:block}
+
+/* Cards */
+.card{background:var(--surface);border-radius:14px;padding:14px;margin-bottom:12px;border:0.5px solid var(--border)}
+.sec-lbl{font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:10px}
+
+/* Metric row */
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.metric{background:var(--bg);border-radius:10px;padding:10px;text-align:center}
+.metric-val{font-size:26px;font-weight:700;color:var(--text)}
+.metric-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+.metric-sub{font-size:11px;color:var(--muted)}
+
+/* Unit items */
+.unit-item{display:flex;align-items:center;gap:8px;padding:10px;border:0.5px solid var(--border);border-radius:10px;margin-bottom:6px;background:var(--surface)}
+.unit-info{flex:1;min-width:0}
+.unit-name{font-size:13px;font-weight:600}
+.unit-type{font-size:11px;color:var(--muted);margin-top:1px}
+.unit-price{font-size:13px;font-weight:600;min-width:55px;text-align:center;color:var(--text)}
+select.sel{font-size:11px;padding:5px 6px;border:0.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer;font-family:'Tajawal',sans-serif}
+select.sel.s-high{border-color:var(--red);color:var(--red)}
+select.sel.s-high_plus{border-color:#ec4899;color:#ec4899}
+select.sel.s-mid{border-color:var(--amber);color:var(--amber)}
+select.sel.s-low{border-color:var(--blue);color:var(--blue)}
+select.sel.s-low_extra{border-color:#6366f1;color:#6366f1}
+
+/* Save button */
+.save-btn{width:100%;padding:14px;border-radius:12px;border:none;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:700;cursor:pointer;background:var(--accent);color:white;transition:all .15s;margin-bottom:8px}
+.save-btn:active{transform:scale(.98)}
+.save-btn.loading{background:#a5b4fc}
+.save-btn.ok{background:var(--green)}
+.save-btn.err{background:var(--red)}
+
+/* Time inputs */
+.time-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.time-row label{font-size:13px;color:var(--text);flex:1}
+input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:14px;font-weight:600;text-align:center;font-family:'Tajawal',sans-serif}
+.time-unit{font-size:12px;color:var(--muted)}
+
+/* Schedule rows */
+.sched-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--border)}
+.sched-row:last-child{border-bottom:none}
+.sched-time{font-size:13px;font-weight:600}
+.sched-sub{font-size:11px;color:var(--muted)}
+.sched-p{font-size:13px;font-weight:600;color:var(--muted)}
+.sched-p.done{color:var(--green)}
+.sched-p.nxt{color:var(--amber)}
+.badge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;margin-left:6px}
+.badge.nxt{background:rgba(245,158,11,.12);color:var(--amber)}
+.badge.eve{background:rgba(99,102,241,.12);color:#6366f1}
+
+/* Market chart */
+.chart-wrap{height:130px;position:relative;margin:6px 0 4px}
+.chart-bars{display:flex;align-items:flex-end;gap:4px;height:100%}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.bar{width:100%;border-radius:4px 4px 0 0;transition:height .3s;min-height:4px}
+.bar.apt{background:var(--accent)}
+.bar.std{background:var(--amber)}
+.bar-lbl{font-size:9px;color:var(--muted);white-space:nowrap}
+.bar-val{font-size:9px;color:var(--muted)}
+.chart-legend{display:flex;gap:12px;justify-content:center;margin-top:6px}
+.legend-dot{width:8px;height:8px;border-radius:2px;display:inline-block;margin-left:4px}
+
+/* Occupancy bar */
+.occ-bar-wrap{margin:6px 0 2px}
+.occ-bar-bg{height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin:4px 0}
+.occ-bar-fill{height:100%;border-radius:4px;transition:width .4s}
+.occ-row{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+
+/* Token modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:flex-end}
+.modal-bg.show{display:flex}
+.modal{background:var(--surface);border-radius:18px 18px 0 0;padding:20px;width:100%}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:6px}
+.modal p{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6}
+.modal input{width:100%;padding:10px 12px;border:0.5px solid var(--border);border-radius:10px;font-size:13px;font-family:'Tajawal',sans-serif;background:var(--bg);margin-bottom:10px}
+.modal-btn{width:100%;padding:12px;border-radius:10px;border:none;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;background:var(--accent);color:white}
+.modal-close{width:100%;padding:10px;border-radius:10px;border:none;font-family:'Tajawal',sans-serif;font-size:14px;cursor:pointer;background:transparent;color:var(--muted);margin-top:6px}
+
+.status-bar{font-size:11px;color:var(--muted);text-align:center;padding:6px;background:var(--bg);border-radius:8px}
+.status-bar.ok{color:var(--green)}
+.status-bar.err{color:var(--red)}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <div class="header-title">تسعير ترف <span class="live-dot"></span></div>
+    <div class="header-sub" id="date-lbl">—</div>
+  </div>
+  <button class="token-btn" onclick="showTokenModal()">🔑 التوكن</button>
+</div>
+
+<!-- Pages -->
+<div class="page active" id="page-pricing">
+  <div class="card">
+    <div class="sec-lbl">متوسط السوق — آخر تشغيل</div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-val" id="apt-avg">—</div>
+        <div class="metric-lbl">الشقق ر.س</div>
+        <div class="metric-sub" id="apt-count">— وحدة</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val" id="std-avg">—</div>
+        <div class="metric-lbl">الاستديوهات ر.س</div>
+        <div class="metric-sub" id="std-count">— وحدة</div>
+      </div>
+    </div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-val" id="occ-apt" style="color:var(--accent)">—%</div>
+        <div class="metric-lbl">إشغال الشقق</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val" id="occ-std" style="color:var(--amber)">—%</div>
+        <div class="metric-lbl">إشغال الاستديوهات</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-lbl">استراتيجية الوحدات</div>
+    <div id="units-list"></div>
+  </div>
+
+  <button class="save-btn" id="save-btn" onclick="saveConfig()">حفظ الإعدادات</button>
+  <div class="status-bar" id="save-status">يتم قراءة الإعدادات من GitHub...</div>
+</div>
+
+<div class="page" id="page-schedule">
+  <div class="card">
+    <div class="sec-lbl">ساعات التشغيل</div>
+    <div class="time-row">
+      <label>يبدأ من</label>
+      <input type="number" class="ti" id="start-h" value="11" min="0" max="23" oninput="renderSchedule()">
+      <span class="time-unit">:00</span>
+    </div>
+    <div class="time-row">
+      <label>حتى</label>
+      <input type="number" class="ti" id="end-h" value="23" min="0" max="23" oninput="renderSchedule()">
+      <span class="time-unit">:00</span>
+    </div>
+    <div class="time-row">
+      <label>استراتيجية المساء تبدأ</label>
+      <input type="number" class="ti" id="eve-h" value="19" min="0" max="23" oninput="renderSchedule()">
+      <span class="time-unit">:00</span>
+    </div>
+    <button class="save-btn" style="margin-top:6px" onclick="saveConfig()">حفظ التوقيت</button>
+  </div>
+
+  <div class="card">
+    <div class="sec-lbl">جدول اليوم — بتوقيت السعودية</div>
+    <div id="sched-list"></div>
+  </div>
+</div>
+
+<div class="page" id="page-market">
+  <div class="card">
+    <div class="sec-lbl">متوسط السعر — آخر 7 أيام</div>
+    <div class="chart-wrap">
+      <div class="chart-bars" id="chart-bars"></div>
+    </div>
+    <div class="chart-legend">
+      <span><span class="legend-dot" style="background:var(--accent)"></span>شقق</span>
+      <span><span class="legend-dot" style="background:var(--amber)"></span>استديوهات</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-lbl">نسبة الإشغال — آخر 7 أيام</div>
+    <div id="occ-chart"></div>
+  </div>
+
+  <div class="card">
+    <div class="sec-lbl">ملخص الشهر</div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-val" id="month-apt-avg" style="color:var(--accent)">—</div>
+        <div class="metric-lbl">متوسط الشقق</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val" id="month-std-avg" style="color:var(--amber)">—</div>
+        <div class="metric-lbl">متوسط الاستديوهات</div>
+      </div>
+    </div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-val" id="month-occ-apt">—%</div>
+        <div class="metric-lbl">متوسط إشغال الشقق</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val" id="month-occ-std">—%</div>
+        <div class="metric-lbl">متوسط إشغال الاستديوهات</div>
+      </div>
+    </div>
+    <div class="status-bar" id="market-status">يتم تحميل البيانات...</div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('pricing',this)">
+    <span class="tab-icon">⚙️</span>
+    <span class="tab-lbl">التسعير</span>
+  </button>
+  <button class="tab" onclick="switchTab('schedule',this)">
+    <span class="tab-icon">🕐</span>
+    <span class="tab-lbl">الجدول</span>
+  </button>
+  <button class="tab" onclick="switchTab('market',this)">
+    <span class="tab-icon">📊</span>
+    <span class="tab-lbl">السوق</span>
+  </button>
+</div>
+
+<!-- Token Modal -->
+<div class="modal-bg" id="token-modal">
+  <div class="modal">
+    <h3>🔑 توكن GitHub</h3>
+    <p>مطلوب مرة واحدة فقط، يُخزّن على جهازك ولا يُرسل لأي مكان إلا GitHub.</p>
+    <input type="password" id="token-input" placeholder="ghp_...">
+    <button class="modal-btn" onclick="saveToken()">حفظ التوكن</button>
+    <button class="modal-close" onclick="hideTokenModal()">إلغاء</button>
+  </div>
+</div>
+
+<script>
+const REPO  = "tarafre/gathern-pricing";
+const BRANCH = "main";
+const APT_AVG_DEFAULT = 160, STD_AVG_DEFAULT = 132;
+
+const UNITS = [
+  {name:'ترف 3',  id:'171611', type:'شقة_متوسطة',   base:'apt'},
+  {name:'ترف 4',  id:'172254', type:'شقة_متوسطة',   base:'apt'},
+  {name:'ترف 5',  id:'177451', type:'شقة_عادية',    base:'apt'},
+  {name:'ترف 6',  id:'177498', type:'شقة_عادية',    base:'apt'},
+  {name:'ترف 7',  id:'177494', type:'استديو_عادي',  base:'std'},
+  {name:'ترف 8',  id:'177492', type:'استديو_عادي',  base:'std'},
+  {name:'ترف 9',  id:'225320', type:'شقة_مميزة',    base:'apt'},
+  {name:'ترف 10', id:'183003', type:'استديو_متوسط', base:'std'},
+  {name:'ترف 11', id:'183008', type:'استديو_متوسط', base:'std'},
+  {name:'ترف 12', id:'183016', type:'استديو_متوسط', base:'std'},
+  {name:'ترف 13', id:'214892', type:'شقة_مميزة',    base:'apt'},
+  {name:'ترف 14', id:'214894', type:'شقة_مميزة',    base:'apt'},
+  {name:'ترف 15', id:'214952', type:'شقة_مميزة',    base:'apt'},
+  {name:'ترف 16', id:'214991', type:'شقة_مميزة',    base:'apt'},
+  {name:'ترف 17', id:'214995', type:'شقة_مميزة',    base:'apt'},
+  {name:'ترف 18', id:'243848', type:'شقة_مميزة',    base:'apt'},
+  {name:'ترف 19', id:'241775', type:'استديو_مميز',  base:'std'},
+  {name:'ترف 21', id:'242199', type:'شقة_مميزة',    base:'apt'},
+  {name:'ترف 22', id:'242211', type:'شقة_غرفتين',   base:'apt'},
+  {name:'ترف 23', id:'243598', type:'شقة_غرفتين',   base:'apt'},
+  {name:'ترف 26', id:'241890', type:'استديو_مميز',  base:'std'},
+  {name:'ترف 27', id:'242428', type:'استديو_مميز',  base:'std'},
+  {name:'ترف 28', id:'242505', type:'استديو_مميز',  base:'std'},
+  {name:'ترف 30', id:'243973', type:'استديو_مميز',  base:'std'},
+  {name:'ترف 31', id:'243974', type:'استديو_مميز',  base:'std'},
+];
+
+const DEFAULT_STRAT = {
+  'شقة_مميزة':'high','شقة_متوسطة':'mid','شقة_عادية':'low',
+  'شقة_غرفتين':'high_plus','استديو_مميز':'high',
+  'استديو_متوسط':'mid','استديو_عادي':'low'
+};
+
+const STRAT_OPTS = [
+  {v:'high',      l:'مرتفع +20%'},
+  {v:'high_plus', l:'مرتفع جداً +40%'},
+  {v:'mid',       l:'متوسط'},
+  {v:'low',       l:'منخفض -20%'},
+  {v:'low_extra', l:'منخفض جداً -40%'},
+];
+
+const PCT = {high:1.2, high_plus:1.4, mid:1.0, low:0.8, low_extra:0.6};
+
+let cfg = {start_hour:11, end_hour:23, evening_hour:19, unit_overrides:{}};
+let aptAvg = APT_AVG_DEFAULT, stdAvg = STD_AVG_DEFAULT;
+let configSha = null;
+
+// ── Token ──
+function getToken(){ return localStorage.getItem('gh_token')||'' }
+function saveToken(){
+  const v = document.getElementById('token-input').value.trim();
+  if(!v){alert('أدخل التوكن');return}
+  localStorage.setItem('gh_token',v);
+  hideTokenModal();
+  setStatus('save-status','تم حفظ التوكن ✓','ok');
+  loadConfig();
+}
+function showTokenModal(){
+  document.getElementById('token-input').value = getToken();
+  document.getElementById('token-modal').classList.add('show');
+}
+function hideTokenModal(){ document.getElementById('token-modal').classList.remove('show') }
+
+// ── GitHub API ──
+async function ghGet(path){
+  const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${path}?ref=${BRANCH}`,{
+    headers:{'Authorization':'token '+getToken(),'Accept':'application/vnd.github.v3+json'}
+  });
+  if(!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+async function ghPut(path, content, sha, message){
+  const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${path}`,{
+    method:'PUT',
+    headers:{'Authorization':'token '+getToken(),'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+    body: JSON.stringify({message, content: btoa(unescape(encodeURIComponent(content))), sha, branch: BRANCH})
+  });
+  if(!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+// ── Load config ──
+async function loadConfig(){
+  if(!getToken()){ showTokenModal(); return; }
+  setStatus('save-status','يتم تحميل الإعدادات...','');
+  try {
+    const res = await ghGet('runtime_config.json');
+    configSha = res.sha;
+    cfg = JSON.parse(atob(res.content));
+    document.getElementById('start-h').value = cfg.start_hour || 11;
+    document.getElementById('end-h').value   = cfg.end_hour   || 23;
+    document.getElementById('eve-h').value   = cfg.evening_hour || 19;
+    renderUnits();
+    renderSchedule();
+    setStatus('save-status','تم تحميل الإعدادات ✓','ok');
+  } catch(e){
+    setStatus('save-status','خطأ في التحميل — تحقق من التوكن','err');
+  }
+}
+
+// ── Save config ──
+async function saveConfig(){
+  if(!getToken()){ showTokenModal(); return; }
+  const btn = document.getElementById('save-btn');
+  btn.textContent='⏳ جاري الحفظ...'; btn.className='save-btn loading'; btn.disabled=true;
+
+  cfg.start_hour   = parseInt(document.getElementById('start-h').value)||11;
+  cfg.end_hour     = parseInt(document.getElementById('end-h').value)||23;
+  cfg.evening_hour = parseInt(document.getElementById('eve-h').value)||19;
+
+  // جمع overrides من الـ selects
+  document.querySelectorAll('.sel').forEach(s=>{
+    cfg.unit_overrides[s.dataset.id] = s.value;
+  });
+
+  try {
+    const content = JSON.stringify(cfg, null, 2);
+    const res = await ghPut('runtime_config.json', content, configSha,
+      'dashboard: update pricing config');
+    configSha = res.content.sha;
+    btn.textContent='✅ تم الحفظ!'; btn.className='save-btn ok';
+    setStatus('save-status','التغييرات ستُطبَّق في التشغيل القادم ✓','ok');
+  } catch(e){
+    btn.textContent='❌ فشل الحفظ'; btn.className='save-btn err';
+    setStatus('save-status','تحقق من صلاحيات التوكن','err');
+  }
+
+  setTimeout(()=>{
+    btn.textContent='حفظ الإعدادات'; btn.className='save-btn'; btn.disabled=false;
+  }, 3000);
+}
+
+// ── Render units ──
+function calcPrice(base, strat){
+  const avg = base==='apt' ? aptAvg : stdAvg;
+  return Math.round(avg * (PCT[strat]||1));
+}
+
+function renderUnits(){
+  document.getElementById('units-list').innerHTML = UNITS.map(u => {
+    const cur = cfg.unit_overrides[u.id] || DEFAULT_STRAT[u.type] || 'mid';
+    const price = calcPrice(u.base, cur);
+    const opts = STRAT_OPTS.map(o=>`<option value="${o.v}"${o.v===cur?' selected':''}>${o.l}</option>`).join('');
+    return `<div class="unit-item">
+      <div class="unit-info">
+        <div class="unit-name">${u.name}</div>
+        <div class="unit-type">${u.type.replace(/_/g,' ')}</div>
+      </div>
+      <div class="unit-price">${price} ر.س</div>
+      <select class="sel s-${cur}" data-id="${u.id}" onchange="onSel(this)">
+        ${opts}
+      </select>
+    </div>`;
+  }).join('');
+}
+
+function onSel(sel){
+  cfg.unit_overrides[sel.dataset.id] = sel.value;
+  sel.className = 'sel s-'+sel.value;
+  renderUnits();
+}
+
+// ── Schedule ──
+function renderSchedule(){
+  const startH = parseInt(document.getElementById('start-h').value)||11;
+  const endH   = parseInt(document.getElementById('end-h').value)||23;
+  const eveH   = parseInt(document.getElementById('eve-h').value)||19;
+  const now = new Date();
+  const ksaH = (now.getUTCHours()+3)%24;
+  const ksaMin = now.getUTCMinutes();
+
+  const slots = [];
+  for(let h=startH; h<=endH; h++) slots.push(h);
+
+  let foundNext = false;
+  document.getElementById('sched-list').innerHTML = slots.map(h=>{
+    const done = ksaH > h || (ksaH===h && ksaMin>5);
+    const isNext = !done && !foundNext; if(isNext) foundNext=true;
+    const isEve = h >= eveH;
+    const ampm = h<12?`${h}:00 ص`:h===12?'12:00 م':`${h-12}:00 م`;
+    const price = isEve ? Math.round(aptAvg*0.9) : aptAvg;
+    return `<div class="sched-row">
+      <div style="display:flex;align-items:center">
+        ${isNext?'<span class="badge nxt">التالي</span>':''}
+        ${isEve&&!done?'<span class="badge eve">مساء</span>':''}
+        <div><div class="sched-time">${ampm}</div><div class="sched-sub">${isEve?'استراتيجية المساء':'تحديث تلقائي'}</div></div>
+      </div>
+      <span class="sched-p ${done?'done':isNext?'nxt':''}">${done?'✓ ':''} ${price} ر.س</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Market data from history.csv ──
+async function loadMarketData(){
+  setStatus('market-status','يتم تحميل البيانات...','');
+  try {
+    const res = await ghGet('data/history.csv');
+    const text = atob(res.content).trim();
+    const rows = text.split('\n').slice(1).filter(Boolean).map(r=>r.split(','));
+
+    if(!rows.length){ setStatus('market-status','لا توجد بيانات بعد — سيتوفر بعد أول تشغيل',''); return; }
+
+    // آخر سجل للأرقام الحية
+    const last = rows[rows.length-1];
+    aptAvg = parseInt(last[2])||APT_AVG_DEFAULT;
+    stdAvg = parseInt(last[3])||STD_AVG_DEFAULT;
+    document.getElementById('apt-avg').textContent  = aptAvg;
+    document.getElementById('std-avg').textContent  = stdAvg;
+    document.getElementById('apt-count').textContent = (last[4]||'—') + ' وحدة';
+    document.getElementById('std-count').textContent = (last[6]||'—') + ' وحدة';
+    document.getElementById('occ-apt').textContent  = (last[8]||'—')+'%';
+    document.getElementById('occ-std').textContent  = (last[9]||'—')+'%';
+    renderUnits();
+
+    // آخر 7 أيام (نأخذ آخر قراءة من كل يوم)
+    const byDay = {};
+    rows.forEach(r=>{ if(r[0]) byDay[r[0]] = r; });
+    const days7 = Object.keys(byDay).slice(-7).map(d=>byDay[d]);
+
+    renderChart(days7);
+    renderOccChart(days7);
+
+    // ملخص الشهر
+    const thisMonth = new Date().toISOString().slice(0,7);
+    const monthRows = rows.filter(r=>r[0]&&r[0].startsWith(thisMonth));
+    if(monthRows.length){
+      const mApt = Math.round(monthRows.reduce((s,r)=>s+(parseInt(r[2])||0),0)/monthRows.length);
+      const mStd = Math.round(monthRows.reduce((s,r)=>s+(parseInt(r[3])||0),0)/monthRows.length);
+      const mOA  = Math.round(monthRows.reduce((s,r)=>s+(parseInt(r[8])||0),0)/monthRows.length);
+      const mOS  = Math.round(monthRows.reduce((s,r)=>s+(parseInt(r[9])||0),0)/monthRows.length);
+      document.getElementById('month-apt-avg').textContent = mApt;
+      document.getElementById('month-std-avg').textContent = mStd;
+      document.getElementById('month-occ-apt').textContent = mOA+'%';
+      document.getElementById('month-occ-std').textContent = mOS+'%';
+    }
+
+    setStatus('market-status', `آخر تحديث: ${last[0]} ${last[1]}`, 'ok');
+  } catch(e){
+    setStatus('market-status', rows && rows.length===0 ? 'لا توجد بيانات بعد' : 'خطأ في تحميل البيانات','err');
+  }
+}
+
+function renderChart(days){
+  if(!days.length) return;
+  const maxVal = Math.max(...days.map(r=>Math.max(parseInt(r[2])||0, parseInt(r[3])||0)));
+  document.getElementById('chart-bars').innerHTML = days.map(r=>{
+    const apt = parseInt(r[2])||0, std = parseInt(r[3])||0;
+    const aptH = Math.round((apt/maxVal)*100), stdH = Math.round((std/maxVal)*100);
+    const dayLbl = r[0]?r[0].slice(5):'';
+    return `<div class="bar-col">
+      <div style="display:flex;gap:2px;align-items:flex-end;height:100px;width:100%">
+        <div class="bar apt" style="height:${aptH}%;flex:1"></div>
+        <div class="bar std" style="height:${stdH}%;flex:1"></div>
+      </div>
+      <div class="bar-lbl">${dayLbl}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderOccChart(days){
+  document.getElementById('occ-chart').innerHTML = days.map(r=>{
+    const oa = parseInt(r[8])||0, os = parseInt(r[9])||0;
+    return `<div style="margin-bottom:10px">
+      <div class="occ-row"><span>${r[0]?r[0].slice(5):''}</span><span>شقق ${oa}% | استديوهات ${os}%</span></div>
+      <div class="occ-bar-bg"><div class="occ-bar-fill" style="width:${oa}%;background:var(--accent)"></div></div>
+      <div class="occ-bar-bg"><div class="occ-bar-fill" style="width:${os}%;background:var(--amber)"></div></div>
+    </div>`;
+  }).join('');
+}
+
+// ── Tabs ──
+function switchTab(name, el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  el.classList.add('active');
+  if(name==='market') loadMarketData();
+}
+
+// ── Utils ──
+function setStatus(id, msg, cls){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = msg;
+  el.className = 'status-bar ' + cls;
+}
+
+// ── Init ──
+const days=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const months=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+const n=new Date();
+document.getElementById('date-lbl').textContent=`${days[n.getDay()]}، ${n.getDate()} ${months[n.getMonth()]}`;
+
+renderUnits();
+renderSchedule();
+if(getToken()) loadConfig();
+else { showTokenModal(); setStatus('save-status','أدخل توكن GitHub للبدء',''); }
+</script>
+</body>
+</html>
