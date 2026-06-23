@@ -20,14 +20,28 @@ def load_runtime_config():
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def save_history(today, now_str, apt_avg, std_avg, apt_count, std_count, updated, total):
+def save_history(today, now_str, data, apt_avg, std_avg, updated, total):
     path = os.path.join(BASE_DIR, "data", "history.csv")
     is_new = not os.path.exists(path)
     with open(path, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if is_new:
-            w.writerow(["date","time","apt_avg","studio_avg","apt_count","studio_count","updated","total"])
-        w.writerow([today, now_str, apt_avg, std_avg, apt_count, std_count, updated, total])
+            w.writerow([
+                "date","time",
+                "apt_avg","studio_avg",
+                "all_apt","all_studio",
+                "avail_apt","avail_studio",
+                "occ_apt_pct","occ_studio_pct",
+                "updated","total"
+            ])
+        w.writerow([
+            today, now_str,
+            apt_avg, std_avg,
+            len(data["all_apt"]),    len(data["all_studio"]),
+            len(data["avail_apt"]),  len(data["avail_studio"]),
+            data["occ_apt"],         data["occ_studio"],
+            updated, total
+        ])
 
 from config import *
 
@@ -45,15 +59,13 @@ def calc_price(base, strategy):
     if strategy == "high_plus": return round(base * (1 + (PCT_HIGH+20)/100))
     return round(base)
 
-def collect_prices(page):
-    print("جمع اسعار المنافسين...")
-    apt_prices, studio_prices = [], []
-    url = f"https://gathern.co/search?chalet_types=apartment&city={CITY_ID}"
+def _scrape_pages(page, url, label):
+    """تجمع الأسعار من كل صفحات نتائج البحث لرابط معين."""
+    apt, studio = [], []
     page.goto(url)
     page.wait_for_load_state("domcontentloaded", timeout=60000)
     time.sleep(3)
     for page_num in range(1, 33):
-        print(f"  صفحة {page_num}...")
         cards = page.locator("a[href*='/view/']").all()
         for card in cards:
             try:
@@ -62,10 +74,8 @@ def collect_prices(page):
                     continue
                 if "استديو" in title or "استوديو" in title:
                     unit_type = "studio"
-                elif "غرفتين" in title or "غرفتان" in title:
-                    unit_type = "apt_2br"
                 elif "شقة" in title or "شقه" in title:
-                    unit_type = "apt_1br"
+                    unit_type = "apt"
                 else:
                     continue
                 rating_el = card.locator("span.e1dgygz810")
@@ -82,17 +92,15 @@ def collect_prices(page):
                 if not price_clean:
                     continue
                 price = float(price_clean)
-                max_price = 300 if unit_type == 'studio' else 350
+                max_price = 300 if unit_type == "studio" else 350
                 if price < 80 or price > max_price:
                     continue
                 if unit_type == "studio":
-                    studio_prices.append(price)
-                elif unit_type == "apt_1br":
-                    apt_prices.append(price)
+                    studio.append(price)
+                else:
+                    apt.append(price)
             except:
                 pass
-        print(f"    شقق: {len(apt_prices)} | استديوهات: {len(studio_prices)}")
-        pass  # تمر على كل الصفحات
         try:
             nxt = page.locator("button[aria-label='Go to next page']").first
             if nxt.is_visible() and nxt.is_enabled():
@@ -102,8 +110,42 @@ def collect_prices(page):
                 break
         except:
             break
-    print(f"  اجمالي شقق: {len(apt_prices)} | استديوهات: {len(studio_prices)}")
-    return apt_prices, studio_prices
+    print(f"  [{label}] شقق: {len(apt)} | استديوهات: {len(studio)}")
+    return apt, studio
+
+def collect_prices(page):
+    print("جمع اسعار المنافسين...")
+    today = datetime.now().strftime("%Y-%m-%d")
+    tomorrow = (datetime.now()).strftime("%Y-%m-%d")
+    # نحسب الغد بشكل صحيح
+    from datetime import timedelta
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    base_url   = f"https://gathern.co/search?chalet_types=apartment&city={CITY_ID}"
+    avail_url  = f"{base_url}&checkin={today}&checkout={tomorrow}"
+
+    # بحث 1 — كل الشقق (محجوزة + متاحة)
+    all_apt, all_studio = _scrape_pages(page, base_url, "الكل")
+
+    # بحث 2 — المتاحة فقط
+    avail_apt, avail_studio = _scrape_pages(page, avail_url, "المتاحة")
+
+    # المحجوزة = الفرق (تقريبي بالعدد)
+    booked_apt_count    = max(0, len(all_apt)    - len(avail_apt))
+    booked_studio_count = max(0, len(all_studio) - len(avail_studio))
+    occ_apt    = round(booked_apt_count    / len(all_apt)    * 100) if all_apt    else 0
+    occ_studio = round(booked_studio_count / len(all_studio) * 100) if all_studio else 0
+
+    print(f"  إشغال الشقق: {occ_apt}% | إشغال الاستديوهات: {occ_studio}%")
+
+    return {
+        "all_apt":       all_apt,
+        "all_studio":    all_studio,
+        "avail_apt":     avail_apt,
+        "avail_studio":  avail_studio,
+        "occ_apt":       occ_apt,
+        "occ_studio":    occ_studio,
+    }
 
 def login(page):
     print("تسجيل الدخول...")
@@ -340,14 +382,17 @@ def main():
         browser = p.chromium.launch(headless=False)
         context = browser.new_context()
         research_page = context.new_page()
-        apt_prices, studio_prices = collect_prices(research_page)
-        if not apt_prices:
+        data = collect_prices(research_page)
+        if not data["all_apt"]:
             send_telegram("فشل جمع الاسعار!")
             browser.close()
             return
-        apt_avg = round(statistics.median(apt_prices))
-        std_avg = round(statistics.median(studio_prices)) if studio_prices else apt_avg
-        print(f"متوسط الشقق: {apt_avg} | الاستديوهات: {std_avg}")
+        # نستخدم أسعار المتاحة للمتوسط لو كافية، وإلا نرجع للكل
+        apt_src    = data["avail_apt"]    if len(data["avail_apt"])    >= 10 else data["all_apt"]
+        studio_src = data["avail_studio"] if len(data["avail_studio"]) >= 5  else data["all_studio"]
+        apt_avg = round(statistics.median(apt_src))
+        std_avg = round(statistics.median(studio_src)) if studio_src else apt_avg
+        print(f"متوسط الشقق: {apt_avg} | الاستديوهات: {std_avg} | إشغال: {data['occ_apt']}% / {data['occ_studio']}%")
         business_page = context.new_page()
         logged_in = login(business_page)
         if not logged_in:
@@ -373,15 +418,14 @@ def main():
             else:
                 results.append(f"⏭️ {unit['name']} ← محجوزة")
 
-        save_history(today, now_str, apt_avg, std_avg,
-                     len(apt_prices), len(studio_prices),
-                     updated_count, len(UNITS))
+        save_history(today, now_str, data, apt_avg, std_avg, updated_count, len(UNITS))
 
         time_label = "مساء" if is_evening else now_str
         sep = "━━━━━━━━━━━━━━━"
         msg = (f"📊 تحديث {time_label}\n{sep}\n"
                f"وسيط الشقق: {apt_avg} ر.س\n"
-               f"وسيط الاستديوهات: {std_avg} ر.س\n{sep}\n"
+               f"وسيط الاستديوهات: {std_avg} ر.س\n"
+               f"إشغال السوق: {data['occ_apt']}% شقق | {data['occ_studio']}% استديوهات\n{sep}\n"
                + "\n".join(results)
                + f"\n{sep}\nتم تحديث {updated_count}/{len(UNITS)} وحدة")
         send_telegram(msg)
