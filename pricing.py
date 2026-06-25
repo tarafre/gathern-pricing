@@ -26,22 +26,9 @@ def save_history(today, now_str, data, apt_avg, std_avg, updated, total):
     with open(path, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if is_new:
-            w.writerow([
-                "date","time",
-                "apt_avg","studio_avg",
-                "all_apt","all_studio",
-                "avail_apt","avail_studio",
-                "occ_apt_pct","occ_studio_pct",
-                "updated","total"
-            ])
-        w.writerow([
-            today, now_str,
-            apt_avg, std_avg,
-            len(data["all_apt"]),    len(data["all_studio"]),
-            len(data["avail_apt"]),  len(data["avail_studio"]),
-            data["occ_apt"],         data["occ_studio"],
-            updated, total
-        ])
+            w.writerow(["date","time","apt_avg","studio_avg","apt_count","studio_count","updated","total"])
+        w.writerow([today, now_str, apt_avg, std_avg,
+                    len(data["all_apt"]), len(data["all_studio"]), updated, total])
 
 from config import *
 
@@ -77,9 +64,8 @@ def evening_downgrade(strategy):
         return strategy
 
 def _scrape_pages(page, base_url):
-    """تجمع بيانات الوحدات من __NEXT_DATA__ — تنتقل لكل صفحة بـ URL مستقل."""
-    apt_all, studio_all = [], []
-    apt_avail, studio_avail = [], []
+    """تجمع أسعار الوحدات من __NEXT_DATA__ — تنتقل لكل صفحة بـ URL مستقل."""
+    apt, studio = [], []
 
     for page_num in range(1, 33):
         url = f"{base_url}&page={page_num}"
@@ -119,22 +105,16 @@ def _scrape_pages(page, base_url):
                 if price < 80 or price > max_price:
                     continue
 
-                is_avail = bool(u.get("isUnitAvailable", True))
-
                 if utype == "studio":
-                    studio_all.append(price)
-                    if is_avail:
-                        studio_avail.append(price)
+                    studio.append(price)
                 else:
-                    apt_all.append(price)
-                    if is_avail:
-                        apt_avail.append(price)
+                    apt.append(price)
             except:
                 pass
 
         print(f"  صفحة {page_num}: {len(units)} وحدة")
 
-    return apt_all, studio_all, apt_avail, studio_avail
+    return apt, studio
 
 
 def collect_prices(page):
@@ -147,25 +127,21 @@ def collect_prices(page):
     url = (f"https://gathern.co/search?chalet_types=apartment"
            f"&city={CITY_ID}&checkin={today}&checkout={tomorrow}")
 
-    apt_all, studio_all, apt_avail, studio_avail = _scrape_pages(page, url)
+    apt, studio = _scrape_pages(page, url)
+    print(f"  شقق: {len(apt)} | استديوهات: {len(studio)}")
 
-    occ_apt    = round((len(apt_all)    - len(apt_avail))    / len(apt_all)    * 100) if apt_all    else 0
-    occ_studio = round((len(studio_all) - len(studio_avail)) / len(studio_all) * 100) if studio_all else 0
-
-    print(f"  شقق: {len(apt_all)} كل / {len(apt_avail)} متاحة | إشغال: {occ_apt}%")
-    print(f"  استديو: {len(studio_all)} كل / {len(studio_avail)} متاحة | إشغال: {occ_studio}%")
-
-    return {
-        "all_apt":       apt_all,
-        "all_studio":    studio_all,
-        "avail_apt":     apt_avail,
-        "avail_studio":  studio_avail,
-        "occ_apt":       occ_apt,
-        "occ_studio":    occ_studio,
-    }
+    return {"all_apt": apt, "all_studio": studio}
 
 def login(page):
     print("تسجيل الدخول...")
+    page.goto("https://business.gathern.co")
+    page.wait_for_load_state("domcontentloaded", timeout=60000)
+    time.sleep(3)
+    # إذا الجلسة شغّالة ننتهي فوراً
+    if "login" not in page.url:
+        print("الجلسة لا تزال نشطة، تم الدخول تلقائياً")
+        return True
+    # محاولة تسجيل الدخول
     page.goto("https://business.gathern.co/login")
     page.wait_for_load_state("domcontentloaded", timeout=60000)
     time.sleep(3)
@@ -414,12 +390,9 @@ def main():
             send_telegram("فشل جمع الاسعار!")
             browser.close()
             return
-        # نستخدم أسعار المتاحة للمتوسط لو كافية، وإلا نرجع للكل
-        apt_src    = data["avail_apt"]    if len(data["avail_apt"])    >= 10 else data["all_apt"]
-        studio_src = data["avail_studio"] if len(data["avail_studio"]) >= 5  else data["all_studio"]
-        apt_avg = round(statistics.median(apt_src))
-        std_avg = round(statistics.median(studio_src)) if studio_src else apt_avg
-        print(f"متوسط الشقق: {apt_avg} | الاستديوهات: {std_avg} | إشغال: {data['occ_apt']}% / {data['occ_studio']}%")
+        apt_avg = round(statistics.median(data["all_apt"]))
+        std_avg = round(statistics.median(data["all_studio"])) if data["all_studio"] else apt_avg
+        print(f"متوسط الشقق: {apt_avg} | الاستديوهات: {std_avg}")
         business_page = context.new_page()
         logged_in = login(business_page)
         if not logged_in:
@@ -457,8 +430,7 @@ def main():
         sep = "━━━━━━━━━━━━━━━"
         msg = (f"📊 تحديث {time_label}\n{sep}\n"
                f"وسيط الشقق: {apt_avg} ر.س\n"
-               f"وسيط الاستديوهات: {std_avg} ر.س\n"
-               f"إشغال السوق: {data['occ_apt']}% شقق | {data['occ_studio']}% استديوهات\n{sep}\n"
+               f"وسيط الاستديوهات: {std_avg} ر.س\n{sep}\n"
                + "\n".join(results)
                + f"\n{sep}\nتم تحديث {updated_count}/{len(UNITS)} وحدة")
         send_telegram(msg)
