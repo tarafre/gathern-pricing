@@ -26,10 +26,10 @@ def save_history(today, now_str, data, apt_avg, std_avg, updated, total):
     with open(path, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if is_new:
-            w.writerow(["date","time","apt_avg","studio_avg","apt_count","studio_count","occ_apt","occ_studio","updated","total"])
+            w.writerow(["date","time","apt_avg","studio_avg","apt_count","studio_count","occ_apt","occ_studio","occ_all","updated","total"])
         w.writerow([today, now_str, apt_avg, std_avg,
                     len(data["all_apt"]), len(data["all_studio"]),
-                    data["occ_apt"], data["occ_studio"], updated, total])
+                    data["occ_apt"], data["occ_studio"], data["occ_all"], updated, total])
 
 from config import *
 
@@ -133,12 +133,19 @@ def collect_prices(_page=None):
 
         print(f"  صفحة {page_num}: {len(units)} وحدة")
 
-    occ_apt    = round((len(apt_all)    - len(apt_avail))    / len(apt_all)    * 100) if apt_all    else 0
-    occ_studio = round((len(studio_all) - len(studio_avail)) / len(studio_all) * 100) if studio_all else 0
-    print(f"  شقق: {len(apt_all)} | إشغال: {occ_apt}% | استديوهات: {len(studio_all)} | إشغال: {occ_studio}%")
+    apt_booked    = len(apt_all)    - len(apt_avail)
+    studio_booked = len(studio_all) - len(studio_avail)
+    total_all     = len(apt_all) + len(studio_all)
+    total_booked  = apt_booked + studio_booked
+    occ_apt    = round(apt_booked    / len(apt_all)    * 100) if apt_all    else 0
+    occ_studio = round(studio_booked / len(studio_all) * 100) if studio_all else 0
+    occ_all    = round(total_booked  / total_all       * 100) if total_all  else 0
+    print(f"  شقق: {len(apt_all)} محجوز {apt_booked} ({occ_apt}%) | استديوهات: {len(studio_all)} محجوز {studio_booked} ({occ_studio}%) | الإجمالي: {occ_all}%")
     return {
         "all_apt": apt_all, "all_studio": studio_all,
-        "occ_apt": occ_apt, "occ_studio": occ_studio,
+        "occ_apt": occ_apt, "occ_studio": occ_studio, "occ_all": occ_all,
+        "apt_booked": apt_booked, "studio_booked": studio_booked,
+        "total_booked": total_booked, "total_all": total_all,
     }
 
 def login(page):
@@ -439,7 +446,9 @@ def main():
         msg = (f"📊 تحديث {time_label}\n{sep}\n"
                f"وسيط الشقق: {apt_avg} ر.س\n"
                f"وسيط الاستديوهات: {std_avg} ر.س\n"
-               f"إشغال السوق: {data['occ_apt']}% شقق | {data['occ_studio']}% استديوهات\n{sep}\n"
+               f"إشغال السوق: {data['occ_all']}% (إجمالي)\n"
+               f"  شقق: {data['occ_apt']}% ({data['apt_booked']}/{len(data['all_apt'])} مؤجرة)\n"
+               f"  استديوهات: {data['occ_studio']}% ({data['studio_booked']}/{len(data['all_studio'])} مؤجرة)\n{sep}\n"
                + "\n".join(results)
                + f"\n{sep}\nتم تحديث {updated_count}/{len(UNITS)} وحدة")
         send_telegram(msg)
