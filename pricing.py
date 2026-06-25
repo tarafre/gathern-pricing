@@ -63,25 +63,40 @@ def evening_downgrade(strategy):
     except ValueError:
         return strategy
 
-def _scrape_pages(page, base_url):
-    """تجمع أسعار الوحدات من __NEXT_DATA__ — تنتقل لكل صفحة بـ URL مستقل."""
+def collect_prices(_page=None):
+    """تجمع أسعار السوق مباشرة من API قاذرإن بدون متصفح."""
+    from datetime import timezone, timedelta
+    print("جمع اسعار المنافسين...")
+    ksa_now  = datetime.now(timezone.utc) + timedelta(hours=3)
+    today    = ksa_now.strftime("%Y-%m-%d")
+    tomorrow = (ksa_now + timedelta(days=1)).strftime("%Y-%m-%d")
+
     apt, studio = [], []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+        "Accept": "application/json",
+        "Referer": "https://gathern.co/",
+    }
 
     for page_num in range(1, 33):
-        url = f"{base_url}&page={page_num}"
+        params = {
+            "chalet_cats[]": ["6", "7", "8", "9"],
+            "city": CITY_ID,
+            "checkin": today,
+            "checkout": tomorrow,
+            "page": page_num,
+            "orderby": "points",
+            "lang": "ar",
+        }
         try:
-            page.goto(url, timeout=60000)
-            page.wait_for_load_state("domcontentloaded", timeout=30000)
-            time.sleep(2)
-        except:
-            break
-
-        try:
-            units = page.evaluate(
-                "() => { const s = window.__NEXT_DATA__?.props?.pageProps?.ssr; return s ? Object.values(s) : []; }"
+            r = requests.get(
+                "https://msapi.gathern.co/search/api/v1/search-units",
+                params=params, headers=headers, timeout=15
             )
-        except:
-            units = []
+            units = r.json().get("items", [])
+        except Exception as e:
+            print(f"  خطأ صفحة {page_num}: {e}")
+            break
 
         if not units:
             break
@@ -114,22 +129,7 @@ def _scrape_pages(page, base_url):
 
         print(f"  صفحة {page_num}: {len(units)} وحدة")
 
-    return apt, studio
-
-
-def collect_prices(page):
-    from datetime import timezone, timedelta
-    print("جمع اسعار المنافسين...")
-    ksa_now  = datetime.now(timezone.utc) + timedelta(hours=3)
-    today    = ksa_now.strftime("%Y-%m-%d")
-    tomorrow = (ksa_now + timedelta(days=1)).strftime("%Y-%m-%d")
-
-    url = (f"https://gathern.co/search?chalet_types=apartment"
-           f"&city={CITY_ID}&checkin={today}&checkout={tomorrow}")
-
-    apt, studio = _scrape_pages(page, url)
     print(f"  شقق: {len(apt)} | استديوهات: {len(studio)}")
-
     return {"all_apt": apt, "all_studio": studio}
 
 def login(page):
@@ -384,8 +384,7 @@ def main():
             print("تم استعادة الجلسة المحفوظة")
         else:
             context = browser.new_context()
-        research_page = context.new_page()
-        data = collect_prices(research_page)
+        data = collect_prices()
         if not data["all_apt"]:
             send_telegram("فشل جمع الاسعار!")
             browser.close()
