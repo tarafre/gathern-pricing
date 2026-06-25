@@ -3,7 +3,7 @@ name: Gathern Pricing
 on:
   schedule:
     # كل ساعة من 8 صباحاً حتى 8 مساءً UTC = 11 صباحاً حتى 11 مساءً بتوقيت السعودية
-    - cron: '0 8-20 * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:  # تشغيل يدوي من GitHub عند الحاجة
 
 jobs:
