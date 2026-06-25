@@ -59,48 +59,55 @@ def calc_price(base, strategy):
     if strategy == "high_plus": return round(base * (1 + (PCT_HIGH+20)/100))
     return round(base)
 
-def _scrape_pages(page, url, label):
-    """تجمع الأسعار من كل صفحات نتائج البحث لرابط معين."""
-    apt, studio = [], []
+def _scrape_pages(page, url):
+    """تجمع بيانات الوحدات من __NEXT_DATA__ (بحث واحد يعطي السعر + التوفر)."""
+    apt_all, studio_all = [], []
+    apt_avail, studio_avail = [], []
+
     page.goto(url)
     page.wait_for_load_state("domcontentloaded", timeout=60000)
     time.sleep(3)
-    for page_num in range(1, 33):
-        cards = page.locator("a[href*='/view/']").all()
-        for card in cards:
+
+    for _ in range(1, 33):
+        try:
+            units = page.evaluate(
+                "() => { const s = window.__NEXT_DATA__?.props?.pageProps?.ssr; return s ? Object.values(s) : []; }"
+            )
+        except:
+            units = []
+
+        for u in units:
             try:
-                title = card.locator("h3.e1dgygz88").inner_text(timeout=2000).strip()
-                if not title:
-                    continue
+                title = (u.get("unit_custom_title") or u.get("chalet_title") or "").strip()
                 if "استديو" in title or "استوديو" in title:
-                    unit_type = "studio"
+                    utype = "studio"
                 elif "شقة" in title or "شقه" in title:
-                    unit_type = "apt"
+                    utype = "apt"
                 else:
                     continue
-                rating_el = card.locator("span.e1dgygz810")
-                if rating_el.count() > 0:
-                    spans = rating_el.locator("span").all()
-                    count_text = spans[-1].inner_text(timeout=1000) if spans else "0"
-                    review_count = int(re.sub(r"[^\d]", "", count_text) or "0")
-                else:
-                    review_count = 0
-                if review_count < 3:
+
+                reviews = int(u.get("total_reviews") or u.get("total_present") or 0)
+                if reviews < 3:
                     continue
-                price_text = card.locator("p span.rtl-1hukj43").first.inner_text(timeout=2000).strip()
-                price_clean = re.sub(r"[^\d.]", "", price_text)
-                if not price_clean:
-                    continue
-                price = float(price_clean)
-                max_price = 300 if unit_type == "studio" else 350
+
+                price = float(u.get("cancel_price") or u.get("final_price") or 0)
+                max_price = 300 if utype == "studio" else 350
                 if price < 80 or price > max_price:
                     continue
-                if unit_type == "studio":
-                    studio.append(price)
+
+                is_avail = bool(u.get("isUnitAvailable", True))
+
+                if utype == "studio":
+                    studio_all.append(price)
+                    if is_avail:
+                        studio_avail.append(price)
                 else:
-                    apt.append(price)
+                    apt_all.append(price)
+                    if is_avail:
+                        apt_avail.append(price)
             except:
                 pass
+
         try:
             nxt = page.locator("button[aria-label='Go to next page']").first
             if nxt.is_visible() and nxt.is_enabled():
@@ -110,39 +117,33 @@ def _scrape_pages(page, url, label):
                 break
         except:
             break
-    print(f"  [{label}] شقق: {len(apt)} | استديوهات: {len(studio)}")
-    return apt, studio
+
+    return apt_all, studio_all, apt_avail, studio_avail
+
 
 def collect_prices(page):
+    from datetime import timezone, timedelta
     print("جمع اسعار المنافسين...")
-    today = datetime.now().strftime("%Y-%m-%d")
-    tomorrow = (datetime.now()).strftime("%Y-%m-%d")
-    # نحسب الغد بشكل صحيح
-    from datetime import timedelta
-    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    ksa_now  = datetime.now(timezone.utc) + timedelta(hours=3)
+    today    = ksa_now.strftime("%Y-%m-%d")
+    tomorrow = (ksa_now + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    base_url   = f"https://gathern.co/search?chalet_types=apartment&city={CITY_ID}"
-    avail_url  = f"{base_url}&checkin={today}&checkout={tomorrow}"
+    url = (f"https://gathern.co/search?chalet_types=apartment"
+           f"&city={CITY_ID}&checkin={today}&checkout={tomorrow}")
 
-    # بحث 1 — كل الشقق (محجوزة + متاحة)
-    all_apt, all_studio = _scrape_pages(page, base_url, "الكل")
+    apt_all, studio_all, apt_avail, studio_avail = _scrape_pages(page, url)
 
-    # بحث 2 — المتاحة فقط
-    avail_apt, avail_studio = _scrape_pages(page, avail_url, "المتاحة")
+    occ_apt    = round((len(apt_all)    - len(apt_avail))    / len(apt_all)    * 100) if apt_all    else 0
+    occ_studio = round((len(studio_all) - len(studio_avail)) / len(studio_all) * 100) if studio_all else 0
 
-    # المحجوزة = الفرق (تقريبي بالعدد)
-    booked_apt_count    = max(0, len(all_apt)    - len(avail_apt))
-    booked_studio_count = max(0, len(all_studio) - len(avail_studio))
-    occ_apt    = round(booked_apt_count    / len(all_apt)    * 100) if all_apt    else 0
-    occ_studio = round(booked_studio_count / len(all_studio) * 100) if all_studio else 0
-
-    print(f"  إشغال الشقق: {occ_apt}% | إشغال الاستديوهات: {occ_studio}%")
+    print(f"  شقق: {len(apt_all)} كل / {len(apt_avail)} متاحة | إشغال: {occ_apt}%")
+    print(f"  استديو: {len(studio_all)} كل / {len(studio_avail)} متاحة | إشغال: {occ_studio}%")
 
     return {
-        "all_apt":       all_apt,
-        "all_studio":    all_studio,
-        "avail_apt":     avail_apt,
-        "avail_studio":  avail_studio,
+        "all_apt":       apt_all,
+        "all_studio":    studio_all,
+        "avail_apt":     apt_avail,
+        "avail_studio":  studio_avail,
         "occ_apt":       occ_apt,
         "occ_studio":    occ_studio,
     }
