@@ -26,9 +26,10 @@ def save_history(today, now_str, data, apt_avg, std_avg, updated, total):
     with open(path, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if is_new:
-            w.writerow(["date","time","apt_avg","studio_avg","apt_count","studio_count","updated","total"])
+            w.writerow(["date","time","apt_avg","studio_avg","apt_count","studio_count","occ_apt","occ_studio","updated","total"])
         w.writerow([today, now_str, apt_avg, std_avg,
-                    len(data["all_apt"]), len(data["all_studio"]), updated, total])
+                    len(data["all_apt"]), len(data["all_studio"]),
+                    data["occ_apt"], data["occ_studio"], updated, total])
 
 from config import *
 
@@ -71,7 +72,7 @@ def collect_prices(_page=None):
     today    = ksa_now.strftime("%Y-%m-%d")
     tomorrow = (ksa_now + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    apt, studio = [], []
+    apt_all, studio_all, apt_avail, studio_avail = [], [], [], []
     headers = {
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
         "Accept": "application/json",
@@ -116,21 +117,29 @@ def collect_prices(_page=None):
                     continue
 
                 price = float(u.get("cancel_price") or u.get("final_price") or 0)
-                max_price = 300 if utype == "studio" else 350
+                max_price = 300 if utype == "studio" else 400
                 if price < 80 or price > max_price:
                     continue
 
+                is_avail = bool(u.get("isUnitAvailable", True))
                 if utype == "studio":
-                    studio.append(price)
+                    studio_all.append(price)
+                    if is_avail: studio_avail.append(price)
                 else:
-                    apt.append(price)
+                    apt_all.append(price)
+                    if is_avail: apt_avail.append(price)
             except:
                 pass
 
         print(f"  صفحة {page_num}: {len(units)} وحدة")
 
-    print(f"  شقق: {len(apt)} | استديوهات: {len(studio)}")
-    return {"all_apt": apt, "all_studio": studio}
+    occ_apt    = round((len(apt_all)    - len(apt_avail))    / len(apt_all)    * 100) if apt_all    else 0
+    occ_studio = round((len(studio_all) - len(studio_avail)) / len(studio_all) * 100) if studio_all else 0
+    print(f"  شقق: {len(apt_all)} | إشغال: {occ_apt}% | استديوهات: {len(studio_all)} | إشغال: {occ_studio}%")
+    return {
+        "all_apt": apt_all, "all_studio": studio_all,
+        "occ_apt": occ_apt, "occ_studio": occ_studio,
+    }
 
 def login(page):
     print("تسجيل الدخول...")
@@ -429,7 +438,8 @@ def main():
         sep = "━━━━━━━━━━━━━━━"
         msg = (f"📊 تحديث {time_label}\n{sep}\n"
                f"وسيط الشقق: {apt_avg} ر.س\n"
-               f"وسيط الاستديوهات: {std_avg} ر.س\n{sep}\n"
+               f"وسيط الاستديوهات: {std_avg} ر.س\n"
+               f"إشغال السوق: {data['occ_apt']}% شقق | {data['occ_studio']}% استديوهات\n{sep}\n"
                + "\n".join(results)
                + f"\n{sep}\nتم تحديث {updated_count}/{len(UNITS)} وحدة")
         send_telegram(msg)
