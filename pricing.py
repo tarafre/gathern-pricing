@@ -51,13 +51,30 @@ def send_telegram(msg):
             json={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"})
     except: pass
 
+# سلّم الاستراتيجيات بالترتيب من الأعلى للأدنى
+STRATEGY_LADDER = ["+30", "+20", "+10", "0", "-10", "-15", "-20", "-30"]
+
+# توافق مع الأسماء القديمة
+LEGACY_MAP = {
+    "high_plus": "+30", "high": "+20", "mid": "0",
+    "low": "-20", "low_extra": "-30",
+}
+
 def calc_price(base, strategy):
-    if strategy == "high":      return round(base * (1 + PCT_HIGH/100))
-    if strategy == "mid":       return round(base)
-    if strategy == "low":       return round(base * (1 - PCT_LOW/100))
-    if strategy == "low_extra": return round(base * (1 - (PCT_LOW*2)/100))
-    if strategy == "high_plus": return round(base * (1 + (PCT_HIGH+20)/100))
-    return round(base)
+    strategy = LEGACY_MAP.get(strategy, strategy)
+    try:
+        pct = int(strategy)
+        return round(base * (1 + pct / 100))
+    except (ValueError, TypeError):
+        return round(base)
+
+def evening_downgrade(strategy):
+    strategy = LEGACY_MAP.get(strategy, strategy)
+    try:
+        idx = STRATEGY_LADDER.index(strategy)
+        return STRATEGY_LADDER[min(idx + 1, len(STRATEGY_LADDER) - 1)]
+    except ValueError:
+        return strategy
 
 def _scrape_pages(page, base_url):
     """تجمع بيانات الوحدات من __NEXT_DATA__ — تنتقل لكل صفحة بـ URL مستقل."""
@@ -416,26 +433,15 @@ def main():
         except:
             pass
 
-        # خريطة تخفيض الاستراتيجية عند المساء (درجة واحدة للأسفل)
-        EVENING_DOWNGRADE = {
-            "high_plus": "high",
-            "high":      "mid",
-            "mid":       "low",
-            "low":       "low_extra",
-            "low_extra": "low_extra",
-        }
-
         results = []
         updated_count = 0
 
         for unit in UNITS:
             uid = unit["unit_id"]
             utype = unit["type"]
-            # الاستراتيجية الأساسية: override أو الافتراضي حسب النوع
-            strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "mid")
-            # عند المساء: ننزّل درجة واحدة تلقائياً
+            strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
             if is_evening:
-                strategy = EVENING_DOWNGRADE.get(strategy, "low")
+                strategy = evening_downgrade(strategy)
             base = std_avg if "استديو" in utype else apt_avg
             price = calc_price(base, strategy)
             success = update_price(business_page, unit, price, today)

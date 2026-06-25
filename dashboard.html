@@ -52,11 +52,14 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .unit-type{font-size:11px;color:var(--muted);margin-top:1px}
 .unit-price{font-size:13px;font-weight:600;min-width:55px;text-align:center;color:var(--text)}
 select.sel{font-size:11px;padding:5px 6px;border:0.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer;font-family:'Tajawal',sans-serif}
-select.sel.s-high{border-color:var(--red);color:var(--red)}
-select.sel.s-high_plus{border-color:#ec4899;color:#ec4899}
-select.sel.s-mid{border-color:var(--amber);color:var(--amber)}
-select.sel.s-low{border-color:var(--blue);color:var(--blue)}
-select.sel.s-low_extra{border-color:#6366f1;color:#6366f1}
+select.sel.sp30{border-color:#dc2626;color:#dc2626}
+select.sel.sp20{border-color:#ef4444;color:#ef4444}
+select.sel.sp10{border-color:#f97316;color:#f97316}
+select.sel.s0{border-color:var(--amber);color:var(--amber)}
+select.sel.sm10{border-color:#60a5fa;color:#60a5fa}
+select.sel.sm15{border-color:#3b82f6;color:#3b82f6}
+select.sel.sm20{border-color:#2563eb;color:#2563eb}
+select.sel.sm30{border-color:#6366f1;color:#6366f1}
 
 /* Save button */
 .save-btn{width:100%;padding:14px;border-radius:12px;border:none;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:700;cursor:pointer;background:var(--accent);color:white;transition:all .15s;margin-bottom:8px}
@@ -296,20 +299,30 @@ const UNITS = [
 ];
 
 const DEFAULT_STRAT = {
-  'شقة_مميزة':'high','شقة_متوسطة':'mid','شقة_عادية':'low',
-  'شقة_غرفتين':'high_plus','استديو_مميز':'high',
-  'استديو_متوسط':'mid','استديو_عادي':'low'
+  'شقة_مميزة':'+20','شقة_متوسطة':'0','شقة_عادية':'-20',
+  'شقة_غرفتين':'+30','استديو_مميز':'+20',
+  'استديو_متوسط':'0','استديو_عادي':'-20'
 };
 
+const LEGACY_MAP = {high_plus:'+30',high:'+20',mid:'0',low:'-20',low_extra:'-30'};
+
 const STRAT_OPTS = [
-  {v:'high',      l:'مرتفع +20%'},
-  {v:'high_plus', l:'مرتفع جداً +40%'},
-  {v:'mid',       l:'متوسط'},
-  {v:'low',       l:'منخفض -20%'},
-  {v:'low_extra', l:'منخفض جداً -40%'},
+  {v:'+30', l:'مرتفع جداً +30%'},
+  {v:'+20', l:'مرتفع +20%'},
+  {v:'+10', l:'مرتفع قليلاً +10%'},
+  {v:'0',   l:'متوسط السوق'},
+  {v:'-10', l:'منخفض -10%'},
+  {v:'-15', l:'منخفض -15%'},
+  {v:'-20', l:'منخفض -20%'},
+  {v:'-30', l:'منخفض جداً -30%'},
 ];
 
-const PCT = {high:1.2, high_plus:1.4, mid:1.0, low:0.8, low_extra:0.6};
+function stratClass(s){
+  s = LEGACY_MAP[s] || s;
+  const m={'+30':'sp30','+20':'sp20','+10':'sp10','0':'s0','-10':'sm10','-15':'sm15','-20':'sm20','-30':'sm30'};
+  return m[s] || 's0';
+}
+const PCT = new Proxy({}, {get:(_,s) => { s=LEGACY_MAP[s]||s; return 1+(parseInt(s)||0)/100; }});
 
 let cfg = {start_hour:11, end_hour:23, evening_hour:19, unit_overrides:{}};
 let aptAvg = APT_AVG_DEFAULT, stdAvg = STD_AVG_DEFAULT;
@@ -441,7 +454,8 @@ function calcPrice(base, strat){
 
 function renderUnits(){
   document.getElementById('units-list').innerHTML = UNITS.map(u => {
-    const cur = cfg.unit_overrides[u.id] || DEFAULT_STRAT[u.type] || 'mid';
+    const raw = cfg.unit_overrides[u.id] || DEFAULT_STRAT[u.type] || '0';
+    const cur = LEGACY_MAP[raw] || raw;
     const price = calcPrice(u.base, cur);
     const opts = STRAT_OPTS.map(o=>`<option value="${o.v}"${o.v===cur?' selected':''}>${o.l}</option>`).join('');
     return `<div class="unit-item">
@@ -450,7 +464,7 @@ function renderUnits(){
         <div class="unit-type">${u.type.replace(/_/g,' ')}</div>
       </div>
       <div class="unit-price">${price} ر.س</div>
-      <select class="sel s-${cur}" data-id="${u.id}" onchange="onSel(this)">
+      <select class="sel ${stratClass(cur)}" data-id="${u.id}" onchange="onSel(this)">
         ${opts}
       </select>
     </div>`;
@@ -459,7 +473,7 @@ function renderUnits(){
 
 function onSel(sel){
   cfg.unit_overrides[sel.dataset.id] = sel.value;
-  sel.className = 'sel s-'+sel.value;
+  sel.className = 'sel ' + stratClass(sel.value);
   renderUnits();
 }
 
