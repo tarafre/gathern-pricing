@@ -161,6 +161,7 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
   </div>
 
   <button class="save-btn" id="save-btn" onclick="saveConfig()">حفظ الإعدادات</button>
+  <button class="save-btn" id="trigger-btn" onclick="triggerNow()" style="background:#059669;margin-top:-4px">⚡ غيّر الأسعار الآن</button>
   <div class="status-bar" id="save-status">يتم قراءة الإعدادات من GitHub...</div>
 </div>
 
@@ -384,6 +385,11 @@ async function saveConfig(){
   });
 
   try {
+    // لو configSha فاضي، نجيبه أول
+    if(!configSha){
+      const cur = await ghGet('runtime_config.json');
+      configSha = cur.sha;
+    }
     const content = JSON.stringify(cfg, null, 2);
     const res = await ghPut('runtime_config.json', content, configSha,
       'dashboard: update pricing config');
@@ -398,6 +404,33 @@ async function saveConfig(){
   setTimeout(()=>{
     btn.textContent='حفظ الإعدادات'; btn.className='save-btn'; btn.disabled=false;
   }, 3000);
+}
+
+// ── Trigger workflow now ──
+async function triggerNow(){
+  if(!getToken()){ showTokenModal(); return; }
+  const btn = document.getElementById('trigger-btn');
+  btn.textContent='⏳ جاري التشغيل...'; btn.disabled=true;
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${REPO}/actions/workflows/pricing.yml/dispatches`,
+      { method:'POST',
+        headers:{'Authorization':'token '+getToken(),'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+        body: JSON.stringify({ref: BRANCH})
+      }
+    );
+    if(r.status===204){
+      btn.textContent='✅ تم التشغيل!';
+      btn.style.background='var(--green)';
+      setTimeout(()=>{ btn.textContent='⚡ غيّر الأسعار الآن'; btn.style.background=''; btn.disabled=false; }, 4000);
+    } else {
+      throw new Error(r.status);
+    }
+  } catch(e){
+    btn.textContent='❌ فشل التشغيل';
+    btn.style.background='var(--red)';
+    setTimeout(()=>{ btn.textContent='⚡ غيّر الأسعار الآن'; btn.style.background=''; btn.disabled=false; }, 3000);
+  }
 }
 
 // ── Render units ──
