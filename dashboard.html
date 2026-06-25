@@ -150,11 +150,17 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
       <div class="metric">
         <div class="metric-val" id="occ-apt" style="color:var(--accent)">—%</div>
         <div class="metric-lbl">إشغال الشقق</div>
+        <div class="metric-sub" id="occ-apt-sub"></div>
       </div>
       <div class="metric">
         <div class="metric-val" id="occ-std" style="color:var(--amber)">—%</div>
         <div class="metric-lbl">إشغال الاستديوهات</div>
+        <div class="metric-sub" id="occ-std-sub"></div>
       </div>
+    </div>
+    <div class="metric" style="text-align:center;padding:10px;background:var(--bg);border-radius:10px">
+      <div class="metric-val" id="occ-all" style="font-size:20px;color:var(--text)">—%</div>
+      <div class="metric-lbl">إشغال السوق الإجمالي</div>
     </div>
   </div>
 
@@ -523,10 +529,19 @@ async function loadMarketData(){
     stdAvg = parseInt(last[3])||STD_AVG_DEFAULT;
     document.getElementById('apt-avg').textContent  = aptAvg;
     document.getElementById('std-avg').textContent  = stdAvg;
-    document.getElementById('apt-count').textContent = (last[4]||'—') + ' وحدة';
-    document.getElementById('std-count').textContent = (last[6]||'—') + ' وحدة';
-    document.getElementById('occ-apt').textContent  = (last[8]||'—')+'%';
-    document.getElementById('occ-std').textContent  = (last[9]||'—')+'%';
+    // schema: date(0),time(1),apt_avg(2),studio_avg(3),apt_count(4),studio_count(5),occ_apt(6),occ_studio(7),occ_all(8),updated(9),total(10)
+    const aptCnt = parseInt(last[4])||0;
+    const stdCnt = parseInt(last[5])||0;
+    const occApt = parseInt(last[6])||0;
+    const occStd = parseInt(last[7])||0;
+    const occAll = parseInt(last[8])||0;
+    document.getElementById('apt-count').textContent = aptCnt + ' وحدة';
+    document.getElementById('std-count').textContent = stdCnt + ' وحدة';
+    document.getElementById('occ-apt').textContent   = occApt + '%';
+    document.getElementById('occ-std').textContent   = occStd + '%';
+    document.getElementById('occ-all').textContent   = occAll + '%';
+    document.getElementById('occ-apt-sub').textContent = aptCnt ? Math.round(occApt/100*aptCnt)+'/'+aptCnt+' مؤجرة' : '';
+    document.getElementById('occ-std-sub').textContent = stdCnt ? Math.round(occStd/100*stdCnt)+'/'+stdCnt+' مؤجرة' : '';
     renderUnits();
 
     // آخر 7 أيام (نأخذ آخر قراءة من كل يوم)
@@ -543,8 +558,8 @@ async function loadMarketData(){
     if(monthRows.length){
       const mApt = Math.round(monthRows.reduce((s,r)=>s+(parseInt(r[2])||0),0)/monthRows.length);
       const mStd = Math.round(monthRows.reduce((s,r)=>s+(parseInt(r[3])||0),0)/monthRows.length);
-      const mOA  = Math.round(monthRows.reduce((s,r)=>s+(parseInt(r[8])||0),0)/monthRows.length);
-      const mOS  = Math.round(monthRows.reduce((s,r)=>s+(parseInt(r[9])||0),0)/monthRows.length);
+      const mOA  = Math.round(monthRows.reduce((s,r)=>s+(parseInt(r[6])||0),0)/monthRows.length);
+      const mOS  = Math.round(monthRows.reduce((s,r)=>s+(parseInt(r[7])||0),0)/monthRows.length);
       document.getElementById('month-apt-avg').textContent = mApt;
       document.getElementById('month-std-avg').textContent = mStd;
       document.getElementById('month-occ-apt').textContent = mOA+'%';
@@ -576,9 +591,10 @@ function renderChart(days){
 
 function renderOccChart(days){
   document.getElementById('occ-chart').innerHTML = days.map(r=>{
-    const oa = parseInt(r[8])||0, os = parseInt(r[9])||0;
+    const oa = parseInt(r[6])||0, os = parseInt(r[7])||0, oAll = parseInt(r[8])||0;
     return `<div style="margin-bottom:10px">
-      <div class="occ-row"><span>${r[0]?r[0].slice(5):''}</span><span>شقق ${oa}% | استديوهات ${os}%</span></div>
+      <div class="occ-row"><span>${r[0]?r[0].slice(5):''}</span><span>إجمالي ${oAll}% | شقق ${oa}% | استديوهات ${os}%</span></div>
+      <div class="occ-bar-bg"><div class="occ-bar-fill" style="width:${oAll}%;background:var(--text)"></div></div>
       <div class="occ-bar-bg"><div class="occ-bar-fill" style="width:${oa}%;background:var(--accent)"></div></div>
       <div class="occ-bar-bg"><div class="occ-bar-fill" style="width:${os}%;background:var(--amber)"></div></div>
     </div>`;
