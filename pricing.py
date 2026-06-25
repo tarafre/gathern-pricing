@@ -59,22 +59,29 @@ def calc_price(base, strategy):
     if strategy == "high_plus": return round(base * (1 + (PCT_HIGH+20)/100))
     return round(base)
 
-def _scrape_pages(page, url):
-    """تجمع بيانات الوحدات من __NEXT_DATA__ (بحث واحد يعطي السعر + التوفر)."""
+def _scrape_pages(page, base_url):
+    """تجمع بيانات الوحدات من __NEXT_DATA__ — تنتقل لكل صفحة بـ URL مستقل."""
     apt_all, studio_all = [], []
     apt_avail, studio_avail = [], []
 
-    page.goto(url)
-    page.wait_for_load_state("domcontentloaded", timeout=60000)
-    time.sleep(3)
+    for page_num in range(1, 33):
+        url = f"{base_url}&page={page_num}"
+        try:
+            page.goto(url, timeout=60000)
+            page.wait_for_load_state("domcontentloaded", timeout=30000)
+            time.sleep(2)
+        except:
+            break
 
-    for _ in range(1, 33):
         try:
             units = page.evaluate(
                 "() => { const s = window.__NEXT_DATA__?.props?.pageProps?.ssr; return s ? Object.values(s) : []; }"
             )
         except:
             units = []
+
+        if not units:
+            break
 
         for u in units:
             try:
@@ -108,15 +115,7 @@ def _scrape_pages(page, url):
             except:
                 pass
 
-        try:
-            nxt = page.locator("button[aria-label='Go to next page']").first
-            if nxt.is_visible() and nxt.is_enabled():
-                nxt.click()
-                time.sleep(2)
-            else:
-                break
-        except:
-            break
+        print(f"  صفحة {page_num}: {len(units)} وحدة")
 
     return apt_all, studio_all, apt_avail, studio_avail
 
@@ -382,9 +381,16 @@ def main():
 
     is_evening = hour >= evening_hour
 
+    SESSION_FILE = os.path.join(BASE_DIR, "session_state.json")
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
+        # حمّل الجلسة المحفوظة إذا وُجدت
+        if os.path.exists(SESSION_FILE):
+            context = browser.new_context(storage_state=SESSION_FILE)
+            print("تم استعادة الجلسة المحفوظة")
+        else:
+            context = browser.new_context()
         research_page = context.new_page()
         data = collect_prices(research_page)
         if not data["all_apt"]:
@@ -403,6 +409,12 @@ def main():
             send_telegram("فشل تسجيل الدخول!")
             browser.close()
             return
+        # احفظ الجلسة بعد تسجيل الدخول الناجح
+        try:
+            context.storage_state(path=SESSION_FILE)
+            print("تم حفظ الجلسة")
+        except:
+            pass
 
         # خريطة تخفيض الاستراتيجية عند المساء (درجة واحدة للأسفل)
         EVENING_DOWNGRADE = {

@@ -31,6 +31,12 @@ jobs:
           playwright install chromium
           playwright install-deps chromium
 
+      - name: Restore browser session
+        uses: actions/cache@v4
+        with:
+          path: session_state.json
+          key: gathern-session-v1
+
       - name: Start virtual display
         run: |
           sudo apt-get install -y xvfb
@@ -39,6 +45,13 @@ jobs:
 
       - name: Run pricing tool
         run: python pricing.py
+
+      - name: Save browser session
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: session_state.json
+          key: gathern-session-v1
 
       - name: Save history data
         if: always()
