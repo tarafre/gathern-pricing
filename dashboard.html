@@ -722,7 +722,7 @@ document.getElementById('date-lbl').textContent=`${days[n.getDay()]}، ${n.getDa
 
 renderUnits();
 renderSchedule();
-if(getToken()) loadConfig();
+if(getToken()){ loadConfig(); loadMarketData(); }
 else { showTokenModal(); setStatus('save-status','أدخل توكن GitHub للبدء',''); }
 </script>
 </body>
