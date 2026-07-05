@@ -104,6 +104,23 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
 .occ-bar-fill{height:100%;border-radius:4px;transition:width .4s}
 .occ-row{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
 
+/* Checkbox */
+.unit-check{width:18px;height:18px;cursor:pointer;accent-color:var(--accent);flex-shrink:0}
+.unit-item.selected{border-color:var(--accent);background:rgba(79,70,229,.05)}
+
+/* Bulk bar */
+.bulk-bar{position:fixed;bottom:calc(var(--tab-h) + 8px);left:12px;right:12px;background:var(--text);color:white;border-radius:14px;padding:12px 14px;display:none;align-items:center;gap:8px;z-index:99;box-shadow:0 4px 20px rgba(0,0,0,.25)}
+.bulk-bar.show{display:flex}
+.bulk-count{font-size:13px;font-weight:600;white-space:nowrap}
+.bulk-sel{flex:1;font-size:12px;padding:7px 8px;border-radius:8px;border:none;font-family:'Tajawal',sans-serif;background:rgba(255,255,255,.15);color:white;cursor:pointer}
+.bulk-sel option{color:var(--text);background:var(--surface)}
+.bulk-apply{font-size:13px;font-weight:700;padding:7px 14px;border-radius:8px;border:none;background:var(--accent);color:white;cursor:pointer;font-family:'Tajawal',sans-serif;white-space:nowrap}
+.bulk-cancel{font-size:12px;padding:7px 10px;border-radius:8px;border:none;background:transparent;color:rgba(255,255,255,.6);cursor:pointer;font-family:'Tajawal',sans-serif}
+
+/* Select all row */
+.select-all-row{display:flex;align-items:center;gap:8px;padding:6px 2px;margin-bottom:6px;border-bottom:0.5px solid var(--border)}
+.select-all-lbl{font-size:12px;color:var(--muted);cursor:pointer}
+
 /* Token modal */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:flex-end}
 .modal-bg.show{display:flex}
@@ -166,6 +183,10 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
 
   <div class="card">
     <div class="sec-lbl">استراتيجية الوحدات</div>
+    <div class="select-all-row">
+      <input type="checkbox" id="check-all" class="unit-check" onchange="toggleAll(this)">
+      <label for="check-all" class="select-all-lbl">تحديد الكل</label>
+    </div>
     <div id="units-list"></div>
   </div>
 
@@ -258,6 +279,16 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
     <span class="tab-icon">📊</span>
     <span class="tab-lbl">السوق</span>
   </button>
+</div>
+
+<!-- Bulk action bar -->
+<div class="bulk-bar" id="bulk-bar">
+  <span class="bulk-count" id="bulk-count">0 محدد</span>
+  <select class="bulk-sel" id="bulk-sel">
+    <option value="">— اختر استراتيجية —</option>
+  </select>
+  <button class="bulk-apply" onclick="applyBulk()">تطبيق</button>
+  <button class="bulk-cancel" onclick="clearSelection()">✕</button>
 </div>
 
 <!-- Token Modal -->
@@ -458,13 +489,18 @@ function calcPrice(base, strat){
   return Math.round(avg * (PCT[strat]||1));
 }
 
+let selectedIds = new Set();
+
 function renderUnits(){
   document.getElementById('units-list').innerHTML = UNITS.map(u => {
     const raw = cfg.unit_overrides[u.id] || DEFAULT_STRAT[u.type] || '0';
     const cur = LEGACY_MAP[raw] || raw;
     const price = calcPrice(u.base, cur);
     const opts = STRAT_OPTS.map(o=>`<option value="${o.v}"${o.v===cur?' selected':''}>${o.l}</option>`).join('');
-    return `<div class="unit-item">
+    const chk = selectedIds.has(u.id) ? 'checked' : '';
+    const selCls = selectedIds.has(u.id) ? ' selected' : '';
+    return `<div class="unit-item${selCls}" id="item-${u.id}">
+      <input type="checkbox" class="unit-check" data-id="${u.id}" ${chk} onchange="onCheck(this)">
       <div class="unit-info">
         <div class="unit-name">${u.name}</div>
         <div class="unit-type">${u.type.replace(/_/g,' ')}</div>
@@ -475,12 +511,72 @@ function renderUnits(){
       </select>
     </div>`;
   }).join('');
+  updateBulkBar();
 }
 
 function onSel(sel){
   cfg.unit_overrides[sel.dataset.id] = sel.value;
   sel.className = 'sel ' + stratClass(sel.value);
+  // أعد حساب السعر فقط بدون إعادة رسم الكل
+  const item = document.getElementById('item-'+sel.dataset.id);
+  const u = UNITS.find(x=>x.id===sel.dataset.id);
+  if(u) item.querySelector('.unit-price').textContent = calcPrice(u.base, sel.value) + ' ر.س';
+}
+
+function onCheck(cb){
+  const id = cb.dataset.id;
+  if(cb.checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+  const item = document.getElementById('item-'+id);
+  item.classList.toggle('selected', cb.checked);
+  updateBulkBar();
+  // حدّث "تحديد الكل"
+  const allChk = document.getElementById('check-all');
+  allChk.checked = selectedIds.size === UNITS.length;
+  allChk.indeterminate = selectedIds.size > 0 && selectedIds.size < UNITS.length;
+}
+
+function toggleAll(cb){
+  selectedIds = cb.checked ? new Set(UNITS.map(u=>u.id)) : new Set();
   renderUnits();
+  document.getElementById('check-all').checked = cb.checked;
+}
+
+function updateBulkBar(){
+  const bar = document.getElementById('bulk-bar');
+  const n = selectedIds.size;
+  if(n === 0){ bar.classList.remove('show'); return; }
+  bar.classList.add('show');
+  document.getElementById('bulk-count').textContent = n + ' محدد';
+  // ملّئ الخيارات إذا فاضية
+  const bs = document.getElementById('bulk-sel');
+  if(bs.options.length === 1)
+    STRAT_OPTS.forEach(o=>{ const op=document.createElement('option'); op.value=o.v; op.textContent=o.l; bs.appendChild(op); });
+}
+
+function applyBulk(){
+  const v = document.getElementById('bulk-sel').value;
+  if(!v){ alert('اختر استراتيجية أولاً'); return; }
+  selectedIds.forEach(id=>{
+    cfg.unit_overrides[id] = v;
+    // حدّث الـ select في الصفحة مباشرة
+    const sel = document.querySelector(`.sel[data-id="${id}"]`);
+    if(sel){ sel.value = v; sel.className = 'sel ' + stratClass(v); }
+    const item = document.getElementById('item-'+id);
+    if(item){
+      item.classList.add('selected');
+      const u = UNITS.find(x=>x.id===id);
+      if(u) item.querySelector('.unit-price').textContent = calcPrice(u.base, v) + ' ر.س';
+    }
+  });
+  document.getElementById('bulk-sel').value = '';
+}
+
+function clearSelection(){
+  selectedIds.clear();
+  renderUnits();
+  document.getElementById('check-all').checked = false;
+  document.getElementById('check-all').indeterminate = false;
 }
 
 // ── Schedule ──
