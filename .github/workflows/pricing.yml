@@ -58,7 +58,8 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add data/history.csv || true
+          git fetch origin main
+          git merge --no-edit FETCH_HEAD
+          git add data/history.csv
           git diff --cached --quiet || git commit -m "data: update history $(date -u '+%Y-%m-%d %H:%M')"
-          git pull --rebase origin main || true
           git push
