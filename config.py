@@ -12,9 +12,9 @@ CITY_ID = "1061"  # الخرج
 
 
 # ساعات التشغيل
-START_HOUR = 11  # 11 صباحاً
-END_HOUR = 23     # 11 مساءً
-EVENING_HOUR = 19 # 7 مساءً - تغيير الاستراتيجية
+START_HOUR = 0
+END_HOUR = 23
+EVENING_HOUR = 19
 
 # الوحدات
 UNITS = [
