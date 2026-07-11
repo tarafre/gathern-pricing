@@ -148,14 +148,21 @@ def collect_prices(_page=None):
         "total_booked": total_booked, "total_all": total_all,
     }
 
+def is_logged_in(page):
+    """تحقق من تسجيل الدخول بالانتقال لصفحة حقيقية."""
+    try:
+        page.goto("https://business.gathern.co/app/calendar", timeout=30000)
+        page.wait_for_load_state("domcontentloaded", timeout=30000)
+        time.sleep(2)
+        url = page.url
+        return "/login" not in url and "/auth" not in url and "business.gathern.co/app" in url
+    except:
+        return False
+
 def login(page):
     print("تسجيل الدخول...")
-    page.goto("https://business.gathern.co")
-    page.wait_for_load_state("domcontentloaded", timeout=60000)
-    time.sleep(3)
-    # إذا الجلسة شغّالة ننتهي فوراً
-    if "login" not in page.url:
-        print("الجلسة لا تزال نشطة، تم الدخول تلقائياً")
+    if is_logged_in(page):
+        print("الجلسة لا تزال نشطة")
         return True
     # محاولة تسجيل الدخول
     page.goto("https://business.gathern.co/login")
@@ -165,7 +172,7 @@ def login(page):
     time.sleep(1)
     page.locator("button[type='submit']").first.click()
     time.sleep(4)
-    if "login" not in page.url:
+    if is_logged_in(page):
         print("تم تسجيل الدخول مباشرة!")
         return True
     send_telegram("مطلوب رمز OTP - ارسله هنا مباشرة")
@@ -174,9 +181,6 @@ def login(page):
     last_id = r0["result"][-1]["update_id"] if r0.get("result") else None
     for _ in range(60):
         time.sleep(5)
-        if "login" not in page.url:
-            print("تم تسجيل الدخول!")
-            return True
         try:
             r = requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates", params={"offset": -1}).json()
             updates = r.get("result", [])
@@ -186,16 +190,21 @@ def login(page):
                     continue
                 last_msg = update.get("message", {}).get("text", "").strip()
                 if last_msg.isdigit() and 4 <= len(last_msg) <= 6:
-                    boxes = page.locator("input").all()
-                    for i, d in enumerate(list(last_msg)):
-                        if i < len(boxes):
-                            boxes[i].fill(d)
-                            time.sleep(0.3)
-                    page.locator("button[type='submit']").first.click()
-                    time.sleep(4)
+                    # ارجع لصفحة OTP وأدخل الكود
+                    if "/login" in page.url or "/auth" in page.url or "/otp" in page.url or "/verify" in page.url:
+                        boxes = page.locator("input").all()
+                        for i, d in enumerate(list(last_msg)):
+                            if i < len(boxes):
+                                boxes[i].fill(d)
+                                time.sleep(0.3)
+                        page.locator("button[type='submit']").first.click()
+                        time.sleep(4)
+                    if is_logged_in(page):
+                        print("تم تسجيل الدخول!")
+                        return True
         except:
             pass
-    return "login" not in page.url
+    return is_logged_in(page)
 
 def is_booked(page, today):
     try:
