@@ -277,7 +277,7 @@ def update_price(page, unit, price, today):
             page.wait_for_selector("#unit-select", timeout=15000)
         except:
             print(f"  {name}: الصفحة ما حمّلت")
-            return False
+            return "err_load"
         current_unit = page.locator("#unit-select").inner_text(timeout=3000).strip()
         unit_num = name.replace("ترف ", "").strip()
         if unit_num not in current_unit:
@@ -291,12 +291,12 @@ def update_price(page, unit, price, today):
             else:
                 print(f"  {name}: ما لقيت الخيار في القائمة")
                 page.keyboard.press("Escape")
-                return False
+                return "err_option"
         try:
             page.wait_for_selector("#drag-calendar", timeout=15000)
         except:
             print(f"  {name}: التقويم ما حمّل")
-            return False
+            return "err_calendar"
         day = str(int(today.split("-")[2]))
         day_cells = page.locator("#drag-calendar > div[role='button']").all()
         target_cell = None
@@ -309,64 +309,55 @@ def update_price(page, unit, price, today):
             except:
                 continue
         if not target_cell:
-            print(f"  {name}: ما لقيت اليوم")
-            return False
+            print(f"  {name}: ما لقيت اليوم في التقويم")
+            return "err_day"
         target_cell.click()
         time.sleep(1.5)
         drawer = page.locator(".MuiDrawer-paper").first
         if not drawer.is_visible():
             print(f"  {name}: الـ drawer ما فتح")
-            return False
+            return "err_drawer"
         booked_indicator = drawer.locator("p:has-text('مؤكد حجز'), span:has-text('حجز مؤكد')").count()
         if booked_indicator > 0:
-            print(f"  {name} محجوزة، تخطي")
+            print(f"  {name}: محجوزة فعلاً")
             page.keyboard.press("Escape")
-            return False
+            return "booked"
         pencil = drawer.locator("button.gathern-rtl-zvvl3w").first
         if not pencil.is_visible():
             pencil = drawer.locator("button.MuiIconButton-root").last
         pencil.click()
-
-        # انتظر ظهور خانة السعر
         try:
             page.wait_for_selector("input.MuiInputBase-inputAdornedEnd", state="visible", timeout=6000)
         except Exception:
-            print(f"  {name}: خانة السعر ما ظهرت بعد الضغط على القلم")
-            return False
-
+            print(f"  {name}: خانة السعر ما ظهرت")
+            return "err_input"
         price_input = page.locator("input.MuiInputBase-inputAdornedEnd").first
         price_input.click()
         time.sleep(0.3)
-        # احذف القيمة القديمة ثم اكتب الجديدة
         price_input.fill("")
         time.sleep(0.2)
         price_input.fill(str(price))
         time.sleep(0.5)
-
-        # تحقق أن القيمة اتكتبت صح
         current_val = price_input.input_value()
         if current_val != str(price):
             price_input.triple_click()
             time.sleep(0.2)
             price_input.fill(str(price))
             time.sleep(0.3)
-
-        # انتظر ظهور زر تطبيق السعر
         try:
             page.wait_for_selector("button:has-text('تطبيق السعر')", state="visible", timeout=4000)
         except Exception:
             pass
-
         apply = page.locator("button:has-text('تطبيق السعر')").first
         if not apply.is_visible():
             apply = page.locator("button.MuiButton-containedPrimary").first
         apply.click()
         time.sleep(2)
         print(f"  {name} -> {price} ر.س")
-        return True
+        return "ok"
     except Exception as e:
         print(f"  خطأ {name}: {e}")
-        return False
+        return "err_ex"
 
 def main():
     cfg = load_runtime_config()
@@ -432,12 +423,15 @@ def main():
                 strategy = evening_downgrade(strategy)
             base = std_avg if "استديو" in utype else apt_avg
             price = calc_price(base, strategy)
-            success = update_price(business_page, unit, price, today)
-            if success:
+            status = update_price(business_page, unit, price, today)
+            if status == "ok":
                 updated_count += 1
                 results.append(f"✅ {unit['name']} ← {price} ر.س ({strategy})")
-            else:
+            elif status == "booked":
                 results.append(f"⏭️ {unit['name']} ← محجوزة")
+            else:
+                err_map = {"err_load":"ما حمّلت","err_option":"ما لقيت","err_calendar":"تقويم","err_day":"يوم؟","err_drawer":"drawer","err_input":"خانة السعر","err_ex":"خطأ"}
+                results.append(f"❌ {unit['name']} ← {err_map.get(status, status)}")
 
         save_history(today, now_str, data, apt_avg, std_avg, updated_count, len(UNITS))
 
