@@ -1,5 +1,5 @@
 {
-  "start_hour": 11,
+  "start_hour": 0,
   "end_hour": 23,
   "evening_hour": 19,
   "unit_overrides": {
