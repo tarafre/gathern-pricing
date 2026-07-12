@@ -148,23 +148,21 @@ def collect_prices(_page=None):
         "total_booked": total_booked, "total_all": total_all,
     }
 
-def is_logged_in(page):
-    """تحقق من تسجيل الدخول بالانتقال لصفحة حقيقية."""
-    try:
-        page.goto("https://business.gathern.co/app/calendar", timeout=30000)
-        page.wait_for_load_state("domcontentloaded", timeout=30000)
-        time.sleep(2)
-        url = page.url
-        return "/login" not in url and "/auth" not in url and "business.gathern.co/app" in url
-    except:
-        return False
+def on_app(page):
+    """هل نحن داخل لوحة التحكم؟ بدون تنقل."""
+    return "business.gathern.co/app" in page.url and "/login" not in page.url
 
 def login(page):
     print("تسجيل الدخول...")
-    if is_logged_in(page):
+    # فحص الجلسة بالانتقال للتقويم
+    page.goto("https://business.gathern.co/app/calendar")
+    page.wait_for_load_state("domcontentloaded", timeout=30000)
+    time.sleep(2)
+    if on_app(page):
         print("الجلسة لا تزال نشطة")
         return True
-    # محاولة تسجيل الدخول
+
+    # نسجّل دخول
     page.goto("https://business.gathern.co/login")
     page.wait_for_load_state("domcontentloaded", timeout=60000)
     time.sleep(3)
@@ -172,39 +170,49 @@ def login(page):
     time.sleep(1)
     page.locator("button[type='submit']").first.click()
     time.sleep(4)
-    if is_logged_in(page):
+
+    # دخل مباشرة بدون OTP؟
+    if on_app(page):
         print("تم تسجيل الدخول مباشرة!")
         return True
+
+    # نحتاج OTP — نبقى على صفحة OTP ولا ننتقل منها
     send_telegram("مطلوب رمز OTP - ارسله هنا مباشرة")
-    print("انتظار OTP...")
+    print(f"انتظار OTP... URL: {page.url}")
     r0 = requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates", params={"offset": -1}).json()
     last_id = r0["result"][-1]["update_id"] if r0.get("result") else None
+
     for _ in range(60):
         time.sleep(5)
+        if on_app(page):
+            print("تم تسجيل الدخول!")
+            return True
         try:
             r = requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates", params={"offset": -1}).json()
             updates = r.get("result", [])
-            if updates:
-                update = updates[-1]
-                if last_id and update["update_id"] <= last_id:
-                    continue
-                last_msg = update.get("message", {}).get("text", "").strip()
-                if last_msg.isdigit() and 4 <= len(last_msg) <= 6:
-                    # ارجع لصفحة OTP وأدخل الكود
-                    if "/login" in page.url or "/auth" in page.url or "/otp" in page.url or "/verify" in page.url:
-                        boxes = page.locator("input").all()
-                        for i, d in enumerate(list(last_msg)):
-                            if i < len(boxes):
-                                boxes[i].fill(d)
-                                time.sleep(0.3)
-                        page.locator("button[type='submit']").first.click()
-                        time.sleep(4)
-                    if is_logged_in(page):
-                        print("تم تسجيل الدخول!")
-                        return True
-        except:
-            pass
-    return is_logged_in(page)
+            if not updates:
+                continue
+            update = updates[-1]
+            if last_id and update["update_id"] <= last_id:
+                continue
+            last_msg = update.get("message", {}).get("text", "").strip()
+            if last_msg.isdigit() and 4 <= len(last_msg) <= 6:
+                last_id = update["update_id"]
+                print(f"  OTP: {last_msg} | URL: {page.url}")
+                boxes = page.locator("input").all()
+                print(f"  inputs: {len(boxes)}")
+                for i, d in enumerate(list(last_msg)):
+                    if i < len(boxes):
+                        boxes[i].fill(d)
+                        time.sleep(0.3)
+                page.locator("button[type='submit']").first.click()
+                time.sleep(4)
+                if on_app(page):
+                    print("تم تسجيل الدخول!")
+                    return True
+        except Exception as e:
+            print(f"خطأ OTP: {e}")
+    return on_app(page)
 
 def is_booked(page, today):
     try:
