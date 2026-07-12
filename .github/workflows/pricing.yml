@@ -37,7 +37,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: session_state.json
-          key: gathern-session-v1
+          key: gathern-session-${{ github.run_id }}
+          restore-keys: |
+            gathern-session-
 
       - name: Start virtual display
         run: |
@@ -53,7 +55,7 @@ jobs:
         if: always()
         with:
           path: session_state.json
-          key: gathern-session-v1
+          key: gathern-session-${{ github.run_id }}
 
       - name: Save history data
         if: always()
