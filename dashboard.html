@@ -425,9 +425,9 @@ async function saveConfig(){
   const btn = document.getElementById('save-btn');
   btn.textContent='⏳ جاري الحفظ...'; btn.className='save-btn loading'; btn.disabled=true;
 
-  cfg.start_hour   = parseInt(document.getElementById('start-h').value)||11;
-  cfg.end_hour     = parseInt(document.getElementById('end-h').value)||23;
-  cfg.evening_hour = parseInt(document.getElementById('eve-h').value)||19;
+  cfg.start_hour   = parseInt(document.getElementById('start-h').value ?? '0');
+  cfg.end_hour     = parseInt(document.getElementById('end-h').value ?? '23');
+  cfg.evening_hour = parseInt(document.getElementById('eve-h').value ?? '19');
 
   // جمع overrides من الـ selects
   document.querySelectorAll('.sel').forEach(s=>{
