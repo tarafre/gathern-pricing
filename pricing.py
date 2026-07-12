@@ -300,16 +300,12 @@ def update_price(page, unit, price, today):
         if unit_num not in current_unit:
             select_btn = page.locator("#unit-select")
             select_btn.click()
-            time.sleep(2)
             option = page.locator(f"[role='option'][data-value='{unit_id}']").first
             try:
                 option.wait_for(state="visible", timeout=8000)
-            except:
-                pass
-            if option.is_visible():
                 option.click()
-                time.sleep(2)
-            else:
+                time.sleep(1)
+            except:
                 print(f"  {name}: ما لقيت الخيار في القائمة")
                 page.keyboard.press("Escape")
                 return "err_option"
@@ -350,8 +346,10 @@ def update_price(page, unit, price, today):
         try:
             page.wait_for_selector("input.MuiInputBase-inputAdornedEnd", state="visible", timeout=6000)
         except Exception:
-            print(f"  {name}: خانة السعر ما ظهرت")
-            return "err_input"
+            # إذا ما ظهرت خانة السعر = الغالب الشقة محجوزة
+            print(f"  {name}: محجوزة (drawer بدون خانة سعر)")
+            page.keyboard.press("Escape")
+            return "booked"
         price_input = page.locator("input.MuiInputBase-inputAdornedEnd").first
         price_input.click()
         time.sleep(0.3)
