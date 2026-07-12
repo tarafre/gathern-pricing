@@ -300,8 +300,12 @@ def update_price(page, unit, price, today):
         if unit_num not in current_unit:
             select_btn = page.locator("#unit-select")
             select_btn.click()
-            time.sleep(1)
+            time.sleep(2)
             option = page.locator(f"[role='option'][data-value='{unit_id}']").first
+            try:
+                option.wait_for(state="visible", timeout=8000)
+            except:
+                pass
             if option.is_visible():
                 option.click()
                 time.sleep(2)
