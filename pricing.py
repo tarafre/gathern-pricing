@@ -64,6 +64,17 @@ def evening_downgrade(strategy):
     except ValueError:
         return strategy
 
+PRICE_CAP = 450  # فوق هذا السعر = محجوز فعلياً (صاحب الوحدة رفع السعر لمنع الحجز)
+
+def trimmed_mean(prices, pct=0.10):
+    """متوسط مشذّب: نحذف أعلى وأدنى pct% ونأخذ متوسط الباقي."""
+    if not prices:
+        return 0
+    s = sorted(prices)
+    cut = max(1, int(len(s) * pct))
+    trimmed = s[cut:-cut] if len(s) > cut * 2 else s
+    return round(sum(trimmed) / len(trimmed))
+
 def collect_prices(_page=None):
     """تجمع أسعار السوق مباشرة من API قاذرإن بدون متصفح."""
     from datetime import timezone, timedelta
@@ -117,11 +128,16 @@ def collect_prices(_page=None):
                     continue
 
                 price = float(u.get("cancel_price") or u.get("final_price") or 0)
-                max_price = 300 if utype == "studio" else 400
-                if price < 80 or price > max_price:
+                if price < 80:
                     continue
 
-                is_avail = bool(u.get("isUnitAvailable", True))
+                # فوق 450 = صاحب الوحدة رفع السعر ليمنع الحجز → تُعدّ محجوزة
+                is_avail = bool(u.get("isUnitAvailable", True)) and price <= PRICE_CAP
+
+                # نضيف فقط الوحدات ضمن نطاق سعري معقول للإحصاء
+                if price > PRICE_CAP:
+                    continue
+
                 if utype == "studio":
                     studio_all.append(price)
                     if is_avail: studio_avail.append(price)
@@ -143,6 +159,7 @@ def collect_prices(_page=None):
     print(f"  شقق: {len(apt_all)} محجوز {apt_booked} ({occ_apt}%) | استديوهات: {len(studio_all)} محجوز {studio_booked} ({occ_studio}%) | الإجمالي: {occ_all}%")
     return {
         "all_apt": apt_all, "all_studio": studio_all,
+        "avail_apt": apt_avail, "avail_studio": studio_avail,
         "occ_apt": occ_apt, "occ_studio": occ_studio, "occ_all": occ_all,
         "apt_booked": apt_booked, "studio_booked": studio_booked,
         "total_booked": total_booked, "total_all": total_all,
@@ -334,11 +351,16 @@ def update_price(page, unit, price, today):
         if not drawer.is_visible():
             print(f"  {name}: الـ drawer ما فتح")
             return "err_drawer"
-        booked_indicator = drawer.locator("p:has-text('مؤكد حجز'), span:has-text('حجز مؤكد')").count()
-        if booked_indicator > 0:
-            print(f"  {name}: محجوزة فعلاً")
+        guest_booked = drawer.locator("p:has-text('مؤكد حجز'), span:has-text('حجز مؤكد')").count()
+        if guest_booked > 0:
+            print(f"  {name}: محجوزة بضيف")
             page.keyboard.press("Escape")
-            return "booked"
+            return "booked_guest"
+        manual_blocked = drawer.locator("p:has-text('الوحدة مشغولة')").count()
+        if manual_blocked > 0:
+            print(f"  {name}: مشغولة يدوياً")
+            page.keyboard.press("Escape")
+            return "blocked_manual"
         pencil = drawer.locator("button.gathern-rtl-zvvl3w").first
         if not pencil.is_visible():
             pencil = drawer.locator("button.MuiIconButton-root").last
@@ -378,6 +400,199 @@ def update_price(page, unit, price, today):
         print(f"  خطأ {name}: {e}")
         return "err_ex"
 
+AIRBNB_SESSION_FILE = os.path.join(BASE_DIR, "airbnb_session_state.json")
+
+def airbnb_login(page):
+    """تسجيل الدخول على Airbnb وحفظ الجلسة."""
+    print("Airbnb: فحص الجلسة...")
+    page.goto("https://www.airbnb.com/hosting/listings", wait_until="domcontentloaded", timeout=60000)
+    time.sleep(3)
+    if "hosting/listings" in page.url and "login" not in page.url:
+        print("Airbnb: الجلسة نشطة")
+        return True
+
+    print("Airbnb: تسجيل الدخول...")
+    page.goto("https://www.airbnb.com/login", wait_until="domcontentloaded", timeout=60000)
+    time.sleep(2)
+    # أدخل الإيميل
+    email_input = page.locator("input[name='user[email]'], input[type='email'], input[placeholder*='email' i], input[placeholder*='phone' i]").first
+    email_input.fill(AIRBNB_EMAIL)
+    time.sleep(0.5)
+    page.locator("button[type='submit'], button:has-text('Continue'), button:has-text('متابعة')").first.click()
+    time.sleep(2)
+    # أدخل كلمة المرور
+    try:
+        pwd_input = page.locator("input[type='password']").first
+        pwd_input.wait_for(state="visible", timeout=8000)
+        pwd_input.fill(AIRBNB_PASSWORD)
+        time.sleep(0.5)
+        page.locator("button[type='submit']").first.click()
+        time.sleep(4)
+    except:
+        pass
+    # تحقق من النجاح
+    if "hosting" in page.url or page.locator("[data-testid='main-nav']").count() > 0:
+        print("Airbnb: تم تسجيل الدخول")
+        return True
+    # انتظر لو كان فيه 2FA
+    send_telegram("Airbnb: مطلوب تحقق ثنائي - أكمل يدوياً في المتصفح")
+    for _ in range(24):
+        time.sleep(5)
+        if "hosting" in page.url:
+            print("Airbnb: تم تسجيل الدخول بعد التحقق")
+            return True
+    return False
+
+def airbnb_update_price(page, unit, price, today):
+    """يحدث سعر يوم واحد على Airbnb عبر تقويم المضيف."""
+    airbnb_id = unit.get("airbnb_id", "")
+    name = unit["name"]
+    if not airbnb_id:
+        return "no_airbnb"
+    try:
+        url = f"https://www.airbnb.com/hosting/listings/{airbnb_id}/calendar"
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        time.sleep(3)
+        # لو أعاد للـ login فالجلسة انتهت
+        if "login" in page.url:
+            print(f"  Airbnb {name}: الجلسة انتهت")
+            return "err_session"
+        # ابحث عن تاريخ اليوم في التقويم
+        # Airbnb يعرض التاريخ كـ data-testid="calendar-day-YYYY-MM-DD" أو aria-label
+        day_cell = page.locator(
+            f"[data-testid='calendar-day-{today}'], "
+            f"[aria-label*='{today}'], "
+            f"td[data-date='{today}']"
+        ).first
+        try:
+            day_cell.wait_for(state="visible", timeout=10000)
+            day_cell.click()
+            time.sleep(1.5)
+        except:
+            # جرب البحث بشكل مختلف — رقم اليوم فقط
+            day_num = str(int(today.split("-")[2]))
+            # تأكد أن الشهر الصح ظاهر أولاً
+            month_year = datetime.strptime(today, "%Y-%m-%d").strftime("%B %Y")
+            cells = page.locator(f"[role='gridcell']:has-text('{day_num}'), td:has-text('{day_num}')").all()
+            clicked = False
+            for cell in cells:
+                try:
+                    lbl = cell.get_attribute("aria-label") or ""
+                    if today in lbl or month_year in lbl:
+                        cell.click()
+                        clicked = True
+                        time.sleep(1.5)
+                        break
+                except:
+                    continue
+            if not clicked:
+                print(f"  Airbnb {name}: ما لقيت التاريخ")
+                return "err_day"
+        # بعد الضغط على اليوم، يظهر panel لتعديل السعر
+        # Airbnb يستخدم input داخل panel/dialog
+        price_input = page.locator(
+            "input[id*='price'], input[name*='price'], "
+            "[data-testid*='price'] input, "
+            "input[inputmode='numeric']"
+        ).first
+        try:
+            price_input.wait_for(state="visible", timeout=6000)
+        except:
+            # ربما الوحدة محجوزة أو ما فتح الـ panel
+            print(f"  Airbnb {name}: ما فتح panel السعر")
+            page.keyboard.press("Escape")
+            return "err_panel"
+        price_input.triple_click()
+        time.sleep(0.2)
+        price_input.fill(str(price))
+        time.sleep(0.5)
+        # حفظ
+        save_btn = page.locator(
+            "button:has-text('Save'), button:has-text('حفظ'), "
+            "button:has-text('Apply'), button:has-text('تطبيق'), "
+            "[data-testid='save-button']"
+        ).first
+        try:
+            save_btn.wait_for(state="visible", timeout=4000)
+            save_btn.click()
+            time.sleep(2)
+            print(f"  Airbnb {name} -> {price} ر.س")
+            return "ok"
+        except:
+            page.keyboard.press("Escape")
+            return "err_save"
+    except Exception as e:
+        print(f"  Airbnb خطأ {name}: {e}")
+        return "err_ex"
+
+
+def release_unit(page, unit, today):
+    """يضغط زر 'إتاحة' للوحدات المشغولة يدوياً."""
+    unit_id = unit["unit_id"]
+    name = unit["name"]
+    chalet_id = unit["chalet_id"]
+    try:
+        page.goto(f"https://business.gathern.co/app/calendar/unit?chalet={chalet_id}&unit_id={unit_id}")
+        page.wait_for_load_state("domcontentloaded", timeout=60000)
+        time.sleep(3)
+        close_dialog(page)
+        try:
+            page.wait_for_selector("#unit-select", timeout=15000)
+        except:
+            return "err_load"
+        current_unit = page.locator("#unit-select").inner_text(timeout=3000).strip()
+        unit_num = name.replace("ترف ", "").strip()
+        if unit_num not in current_unit:
+            select_btn = page.locator("#unit-select")
+            select_btn.click()
+            option = page.locator(f"[role='option'][data-value='{unit_id}']").first
+            try:
+                option.wait_for(state="visible", timeout=8000)
+                option.click()
+                time.sleep(1)
+            except:
+                page.keyboard.press("Escape")
+                return "err_option"
+        try:
+            page.wait_for_selector("#drag-calendar", timeout=15000)
+        except:
+            return "err_calendar"
+        day = str(int(today.split("-")[2]))
+        day_cells = page.locator("#drag-calendar > div[role='button']").all()
+        target_cell = None
+        for cell in day_cells:
+            try:
+                if cell.locator("p span").first.inner_text(timeout=500).strip() == day:
+                    target_cell = cell
+                    break
+            except:
+                continue
+        if not target_cell:
+            return "err_day"
+        target_cell.click()
+        time.sleep(1.5)
+        drawer = page.locator(".MuiDrawer-paper").first
+        if not drawer.is_visible():
+            return "err_drawer"
+        # لو ما عادت مشغولة (ربما تغيرت الحالة) تجاهل
+        if drawer.locator("p:has-text('الوحدة مشغولة')").count() == 0:
+            page.keyboard.press("Escape")
+            return "not_blocked"
+        release_btn = drawer.locator("button:has-text('إتاحة')").first
+        try:
+            release_btn.wait_for(state="visible", timeout=5000)
+            release_btn.click()
+            time.sleep(2)
+            print(f"  {name}: تم الإتاحة ✅")
+            return "released"
+        except:
+            page.keyboard.press("Escape")
+            return "err_release"
+    except Exception as e:
+        print(f"  خطأ إتاحة {name}: {e}")
+        return "err_ex"
+
+
 def main():
     cfg = load_runtime_config()
     start_hour   = cfg.get("start_hour",   START_HOUR)
@@ -394,7 +609,11 @@ def main():
     now_str = now.strftime("%H:%M")
     print(f"تشغيل الاداة {now_str} {today}")
 
-    if hour < start_hour or hour > end_hour:
+    minute = now.minute
+    # وضع الإتاحة: 11:50 - 11:59 مساءً بتوقيت السعودية
+    is_midnight_release = (hour == 23 and minute >= 50)
+
+    if not is_midnight_release and (hour < start_hour or hour > end_hour):
         print(f"خارج ساعات التشغيل ({start_hour}:00 - {end_hour}:00)")
         return
 
@@ -415,9 +634,10 @@ def main():
             send_telegram("فشل جمع الاسعار!")
             browser.close()
             return
-        apt_avg = round(statistics.median(data["all_apt"]))
-        std_avg = round(statistics.median(data["all_studio"])) if data["all_studio"] else apt_avg
-        print(f"متوسط الشقق: {apt_avg} | الاستديوهات: {std_avg}")
+        # متوسط مشذّب 10% من المتاحة فقط (المحجوزة وفوق 450 مستبعدة)
+        apt_avg = trimmed_mean(data["avail_apt"], pct=0.10) or trimmed_mean(data["all_apt"], pct=0.10)
+        std_avg = trimmed_mean(data["avail_studio"], pct=0.10) or trimmed_mean(data["all_studio"], pct=0.10) or apt_avg
+        print(f"متوسط الشقق (متاح): {apt_avg} ({len(data['avail_apt'])} وحدة) | الاستديوهات: {std_avg} ({len(data['avail_studio'])} وحدة)")
         business_page = context.new_page()
         logged_in = login(business_page)
         if not logged_in:
@@ -434,6 +654,7 @@ def main():
         results = []
         updated_count = 0
 
+        released_count = 0
         for unit in UNITS:
             uid = unit["unit_id"]
             utype = unit["type"]
@@ -446,27 +667,94 @@ def main():
             if status == "ok":
                 updated_count += 1
                 results.append(f"✅ {unit['name']} ← {price} ر.س ({strategy})")
-            elif status == "booked":
+            elif status == "booked_guest":
                 results.append(f"⏭️ {unit['name']} ← محجوزة")
+            elif status == "blocked_manual":
+                if is_midnight_release:
+                    rel = release_unit(business_page, unit, today)
+                    if rel == "released":
+                        released_count += 1
+                        results.append(f"🔓 {unit['name']} ← تم الإتاحة")
+                    else:
+                        results.append(f"❌ {unit['name']} ← فشل الإتاحة ({rel})")
+                else:
+                    results.append(f"🔒 {unit['name']} ← مشغولة يدوياً")
             else:
-                err_map = {"err_load":"ما حمّلت","err_option":"ما لقيت","err_calendar":"تقويم","err_day":"يوم؟","err_drawer":"drawer","err_input":"خانة السعر","err_ex":"خطأ"}
+                err_map = {"err_load":"ما حمّلت","err_option":"ما لقيت","err_calendar":"تقويم","err_day":"يوم؟","err_drawer":"drawer","err_ex":"خطأ"}
                 results.append(f"❌ {unit['name']} ← {err_map.get(status, status)}")
 
         save_history(today, now_str, data, apt_avg, std_avg, updated_count, len(UNITS))
 
-        time_label = "مساء" if is_evening else now_str
+        time_label = "منتصف الليل - إتاحة" if is_midnight_release else ("مساء" if is_evening else now_str)
         sep = "━━━━━━━━━━━━━━━"
         msg = (f"📊 تحديث {time_label}\n{sep}\n"
-               f"وسيط الشقق: {apt_avg} ر.س\n"
-               f"وسيط الاستديوهات: {std_avg} ر.س\n"
+               f"متوسط الشقق: {apt_avg} ر.س ({len(data['avail_apt'])} متاحة)\n"
+               f"متوسط الاستديوهات: {std_avg} ر.س ({len(data['avail_studio'])} متاحة)\n"
                f"إشغال السوق: {data['occ_all']}% (إجمالي)\n"
                f"  شقق: {data['occ_apt']}% ({data['apt_booked']}/{len(data['all_apt'])} مؤجرة)\n"
                f"  استديوهات: {data['occ_studio']}% ({data['studio_booked']}/{len(data['all_studio'])} مؤجرة)\n{sep}\n"
                + "\n".join(results)
-               + f"\n{sep}\nتم تحديث {updated_count}/{len(UNITS)} وحدة")
+               + f"\n{sep}\nتم تحديث {updated_count}/{len(UNITS)} وحدة"
+               + (f" | تم إتاحة {released_count} 🔓" if is_midnight_release and released_count else "")
+               )
         send_telegram(msg)
-        print("انتهى التحديث!")
+        print("انتهى تحديث Gathern!")
+
+        # ── Airbnb ──────────────────────────────────────────
+        if not AIRBNB_EMAIL or not AIRBNB_PASSWORD:
+            print("Airbnb: لا توجد بيانات دخول، تخطي")
+            browser.close()
+            return
+
+        print("بدء تحديث Airbnb...")
+        if os.path.exists(AIRBNB_SESSION_FILE):
+            ab_context = browser.new_context(storage_state=AIRBNB_SESSION_FILE)
+            print("Airbnb: تم استعادة الجلسة")
+        else:
+            ab_context = browser.new_context()
+
+        ab_page = ab_context.new_page()
+        ab_logged = airbnb_login(ab_page)
+
+        if ab_logged:
+            try:
+                ab_context.storage_state(path=AIRBNB_SESSION_FILE)
+            except:
+                pass
+
+            ab_results = []
+            ab_updated = 0
+            for unit in UNITS:
+                airbnb_id = unit.get("airbnb_id", "")
+                if not airbnb_id:
+                    continue
+                uid = unit["unit_id"]
+                utype = unit["type"]
+                strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
+                if is_evening:
+                    strategy = evening_downgrade(strategy)
+                base = std_avg if "استديو" in utype else apt_avg
+                price = calc_price(base, strategy)
+                status = airbnb_update_price(ab_page, unit, price, today)
+                if status == "ok":
+                    ab_updated += 1
+                    ab_results.append(f"✅ {unit['name']} ← {price} ر.س")
+                elif status == "no_airbnb":
+                    pass
+                else:
+                    err_map = {"err_session":"جلسة منتهية","err_day":"تاريخ؟","err_panel":"panel","err_save":"حفظ","err_ex":"خطأ"}
+                    ab_results.append(f"❌ {unit['name']} ← {err_map.get(status, status)}")
+
+            ab_sep = "━━━━━━━━━━━━━━━"
+            ab_msg = (f"🏠 Airbnb تحديث {time_label}\n{ab_sep}\n"
+                      + "\n".join(ab_results)
+                      + f"\n{ab_sep}\nتم تحديث {ab_updated} وحدة على Airbnb")
+            send_telegram(ab_msg)
+        else:
+            send_telegram("❌ Airbnb: فشل تسجيل الدخول")
+
         browser.close()
+        print("انتهى التحديث الكامل!")
 
 if __name__ == "__main__":
     main()

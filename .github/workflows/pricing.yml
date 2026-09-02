@@ -2,8 +2,10 @@ name: Gathern Pricing
 
 on:
   schedule:
-    # كل ساعة من 8 صباحاً حتى 8 مساءً UTC = 11 صباحاً حتى 11 مساءً بتوقيت السعودية
+    # كل ساعة
     - cron: '0 * * * *'
+    # 11:50 مساءً بتوقيت السعودية (20:50 UTC) - وضع الإتاحة التلقائية
+    - cron: '50 20 * * *'
   workflow_dispatch:  # تشغيل يدوي من GitHub عند الحاجة
 
 jobs:
@@ -17,6 +19,8 @@ jobs:
       GATHERN_PHONE:      ${{ secrets.GATHERN_PHONE }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+      AIRBNB_EMAIL:       ${{ secrets.AIRBNB_EMAIL }}
+      AIRBNB_PASSWORD:    ${{ secrets.AIRBNB_PASSWORD }}
       DISPLAY: ':99'
 
     steps:
@@ -36,7 +40,9 @@ jobs:
       - name: Restore browser session
         uses: actions/cache@v4
         with:
-          path: session_state.json
+          path: |
+            session_state.json
+            airbnb_session_state.json
           key: gathern-session-${{ github.run_id }}
           restore-keys: |
             gathern-session-
@@ -54,7 +60,9 @@ jobs:
         uses: actions/cache/save@v4
         if: always()
         with:
-          path: session_state.json
+          path: |
+            session_state.json
+            airbnb_session_state.json
           key: gathern-session-${{ github.run_id }}
 
       - name: Save history data
