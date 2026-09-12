@@ -702,6 +702,7 @@ def main():
 
         # ── Airbnb ──────────────────────────────────────────
         if not AIRBNB_EMAIL or not AIRBNB_PASSWORD:
+            send_telegram("⚠️ Airbnb: بيانات الدخول غير موجودة (تحقق من الـ Secrets)")
             print("Airbnb: لا توجد بيانات دخول، تخطي")
             browser.close()
             return
