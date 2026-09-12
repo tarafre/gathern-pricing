@@ -406,36 +406,62 @@ def airbnb_login(page):
     """تسجيل الدخول على Airbnb وحفظ الجلسة."""
     print("Airbnb: فحص الجلسة...")
     page.goto("https://www.airbnb.com/hosting/listings", wait_until="domcontentloaded", timeout=60000)
-    time.sleep(3)
+    time.sleep(4)
     if "hosting/listings" in page.url and "login" not in page.url:
         print("Airbnb: الجلسة نشطة")
         return True
 
     print("Airbnb: تسجيل الدخول...")
     page.goto("https://www.airbnb.com/login", wait_until="domcontentloaded", timeout=60000)
-    time.sleep(2)
-    # أدخل الإيميل
-    email_input = page.locator("input[name='user[email]'], input[type='email'], input[placeholder*='email' i], input[placeholder*='phone' i]").first
-    email_input.fill(AIRBNB_EMAIL)
-    time.sleep(0.5)
-    page.locator("button[type='submit'], button:has-text('Continue'), button:has-text('متابعة')").first.click()
-    time.sleep(2)
+    time.sleep(3)
+
+    # Airbnb قد يعرض "Continue with email" أولاً
+    try:
+        email_btn = page.locator("button:has-text('Continue with email'), button:has-text('متابعة بالبريد'), a:has-text('email')").first
+        if email_btn.count() > 0:
+            email_btn.click(timeout=5000)
+            time.sleep(2)
+    except:
+        pass
+
+    # أدخل الإيميل — جرب عدة سيلكتورات
+    email_sel = ("input[name='user[email]'], input[name='email'], "
+                 "input[type='email'], input[id*='email' i], "
+                 "input[placeholder*='email' i], input[placeholder*='phone' i]")
+    try:
+        email_input = page.locator(email_sel).first
+        email_input.wait_for(state="visible", timeout=20000)
+        email_input.fill(AIRBNB_EMAIL)
+        time.sleep(0.5)
+    except Exception as e:
+        print(f"Airbnb: ما لقيت حقل الإيميل: {e}")
+        return False
+
+    # زر التالي
+    try:
+        page.locator("button[type='submit'], button:has-text('Continue'), button:has-text('متابعة')").first.click(timeout=8000)
+        time.sleep(2)
+    except:
+        page.keyboard.press("Enter")
+        time.sleep(2)
+
     # أدخل كلمة المرور
     try:
         pwd_input = page.locator("input[type='password']").first
-        pwd_input.wait_for(state="visible", timeout=8000)
+        pwd_input.wait_for(state="visible", timeout=10000)
         pwd_input.fill(AIRBNB_PASSWORD)
         time.sleep(0.5)
-        page.locator("button[type='submit']").first.click()
+        page.locator("button[type='submit']").first.click(timeout=8000)
         time.sleep(4)
-    except:
-        pass
+    except Exception as e:
+        print(f"Airbnb: مشكلة في حقل كلمة المرور: {e}")
+
     # تحقق من النجاح
     if "hosting" in page.url or page.locator("[data-testid='main-nav']").count() > 0:
         print("Airbnb: تم تسجيل الدخول")
         return True
     # انتظر لو كان فيه 2FA
-    send_telegram("Airbnb: مطلوب تحقق ثنائي - أكمل يدوياً في المتصفح")
+    send_telegram("⚠️ Airbnb: مطلوب تحقق ثنائي - أكمل يدوياً في المتصفح")
     for _ in range(24):
         time.sleep(5)
         if "hosting" in page.url:
@@ -707,52 +733,56 @@ def main():
             browser.close()
             return
 
-        print("بدء تحديث Airbnb...")
-        if os.path.exists(AIRBNB_SESSION_FILE):
-            ab_context = browser.new_context(storage_state=AIRBNB_SESSION_FILE)
-            print("Airbnb: تم استعادة الجلسة")
-        else:
-            ab_context = browser.new_context()
+        try:
+            print("بدء تحديث Airbnb...")
+            if os.path.exists(AIRBNB_SESSION_FILE):
+                ab_context = browser.new_context(storage_state=AIRBNB_SESSION_FILE)
+                print("Airbnb: تم استعادة الجلسة")
+            else:
+                ab_context = browser.new_context()
 
-        ab_page = ab_context.new_page()
-        ab_logged = airbnb_login(ab_page)
+            ab_page = ab_context.new_page()
+            ab_logged = airbnb_login(ab_page)
 
-        if ab_logged:
-            try:
-                ab_context.storage_state(path=AIRBNB_SESSION_FILE)
-            except:
-                pass
-
-            ab_results = []
-            ab_updated = 0
-            for unit in UNITS:
-                airbnb_id = unit.get("airbnb_id", "")
-                if not airbnb_id:
-                    continue
-                uid = unit["unit_id"]
-                utype = unit["type"]
-                strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
-                if is_evening:
-                    strategy = evening_downgrade(strategy)
-                base = std_avg if "استديو" in utype else apt_avg
-                price = calc_price(base, strategy)
-                status = airbnb_update_price(ab_page, unit, price, today)
-                if status == "ok":
-                    ab_updated += 1
-                    ab_results.append(f"✅ {unit['name']} ← {price} ر.س")
-                elif status == "no_airbnb":
+            if ab_logged:
+                try:
+                    ab_context.storage_state(path=AIRBNB_SESSION_FILE)
+                except:
                     pass
-                else:
-                    err_map = {"err_session":"جلسة منتهية","err_day":"تاريخ؟","err_panel":"panel","err_save":"حفظ","err_ex":"خطأ"}
-                    ab_results.append(f"❌ {unit['name']} ← {err_map.get(status, status)}")
 
-            ab_sep = "━━━━━━━━━━━━━━━"
-            ab_msg = (f"🏠 Airbnb تحديث {time_label}\n{ab_sep}\n"
-                      + "\n".join(ab_results)
-                      + f"\n{ab_sep}\nتم تحديث {ab_updated} وحدة على Airbnb")
-            send_telegram(ab_msg)
-        else:
-            send_telegram("❌ Airbnb: فشل تسجيل الدخول")
+                ab_results = []
+                ab_updated = 0
+                for unit in UNITS:
+                    airbnb_id = unit.get("airbnb_id", "")
+                    if not airbnb_id:
+                        continue
+                    uid = unit["unit_id"]
+                    utype = unit["type"]
+                    strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
+                    if is_evening:
+                        strategy = evening_downgrade(strategy)
+                    base = std_avg if "استديو" in utype else apt_avg
+                    price = calc_price(base, strategy)
+                    status = airbnb_update_price(ab_page, unit, price, today)
+                    if status == "ok":
+                        ab_updated += 1
+                        ab_results.append(f"✅ {unit['name']} ← {price} ر.س")
+                    elif status == "no_airbnb":
+                        pass
+                    else:
+                        err_map = {"err_session":"جلسة منتهية","err_day":"تاريخ؟","err_panel":"panel","err_save":"حفظ","err_ex":"خطأ"}
+                        ab_results.append(f"❌ {unit['name']} ← {err_map.get(status, status)}")
+
+                ab_sep = "━━━━━━━━━━━━━━━"
+                ab_msg = (f"🏠 Airbnb تحديث {time_label}\n{ab_sep}\n"
+                          + "\n".join(ab_results)
+                          + f"\n{ab_sep}\nتم تحديث {ab_updated} وحدة على Airbnb")
+                send_telegram(ab_msg)
+            else:
+                send_telegram("❌ Airbnb: فشل تسجيل الدخول")
+        except Exception as e:
+            send_telegram(f"❌ Airbnb خطأ غير متوقع: {e}")
+            print(f"Airbnb خطأ: {e}")
 
         browser.close()
         print("انتهى التحديث الكامل!")
