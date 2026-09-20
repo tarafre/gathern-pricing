@@ -51,6 +51,13 @@ LEGACY_MAP = {
 }
 
 def calc_price(base, strategy):
+    # إذا كانت القيمة رقماً نظيفاً (سعر مطلق من override يدوي) استخدمها مباشرة
+    try:
+        val = float(strategy)
+        if val > 100:  # نعتبر أي قيمة أعلى من 100 سعراً مطلقاً لا نسبة
+            return round(val)
+    except (ValueError, TypeError):
+        pass
     strategy = LEGACY_MAP.get(strategy, strategy)
     try:
         pct = int(strategy)
@@ -695,7 +702,7 @@ def main():
     # وضع الإتاحة: 11:50 - 11:59 مساءً بتوقيت السعودية
     is_midnight_release = (hour == 23 and minute >= 50)
 
-    if not is_midnight_release and (hour < start_hour or hour > end_hour):
+    if not MANUAL_RUN and not is_midnight_release and (hour < start_hour or hour > end_hour):
         print(f"خارج ساعات التشغيل ({start_hour}:00 - {end_hour}:00)")
         return
 
@@ -806,10 +813,15 @@ def main():
             for unit in UNITS:
                 if unit.get("manual_only") and not MANUAL_RUN:
                     continue
-                uid   = unit.get("unit_id", "")
+                uid   = unit.get("unit_id", "") or unit["name"]
                 utype = unit["type"]
-                strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
-                if is_evening:
+                override_val = overrides.get(uid) or overrides.get(unit["name"])
+                # وحدات يدوية: لا تُحدَّث إلا إذا فيها سعر صريح
+                if unit.get("manual_only") and not override_val:
+                    print(f"⏭️ {unit['name']} ← لا يوجد سعر يدوي، تخطي")
+                    continue
+                strategy = override_val or DEFAULT_STRATEGY.get(utype, "0")
+                if is_evening and not unit.get("manual_only"):
                     strategy = evening_downgrade(strategy)
                 base  = std_avg if "استديو" in utype else apt_avg
                 price = calc_price(base, strategy)

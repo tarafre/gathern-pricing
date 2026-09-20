@@ -66,6 +66,12 @@ select.sel.sm20{border-color:#2563eb;color:#2563eb}
 select.sel.sm25{border-color:#4f46e5;color:#4f46e5}
 select.sel.sm30{border-color:#6366f1;color:#6366f1}
 
+/* Manual price input */
+.manual-price-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.manual-price-input{width:72px;padding:6px 8px;border:1.5px solid #8b5cf6;border-radius:10px;font-size:13px;font-weight:700;text-align:center;font-family:'Tajawal',sans-serif;background:var(--bg);color:#8b5cf6;outline:none}
+.manual-price-input:focus{border-color:#7c3aed;box-shadow:0 0 0 3px rgba(139,92,246,.15)}
+.manual-price-lbl{font-size:11px;color:#8b5cf6;white-space:nowrap}
+
 /* Save button */
 .save-btn{width:100%;padding:14px;border-radius:12px;border:none;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:700;cursor:pointer;background:var(--accent);color:white;transition:all .15s;margin-bottom:8px}
 .save-btn:active{transform:scale(.98)}
@@ -306,6 +312,8 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
   <select class="bulk-sel" id="bulk-sel">
     <option value="">— اختر استراتيجية —</option>
   </select>
+  <input type="number" id="bulk-price" placeholder="سعر يدوي" min="1" max="9999"
+    style="width:90px;padding:6px 8px;border-radius:8px;border:none;font-family:'Tajawal',sans-serif;background:rgba(255,255,255,.15);color:white;font-size:12px;text-align:center">
   <button class="bulk-apply" onclick="applyBulk()">تطبيق</button>
   <button class="bulk-cancel" onclick="clearSelection()">✕</button>
 </div>
@@ -534,21 +542,39 @@ function setFilter(cat){
 function renderUnits(){
   const visible = activeFilter === 'all' ? UNITS : UNITS.filter(u => u.cat === activeFilter);
   document.getElementById('units-list').innerHTML = visible.map(u => {
-    const raw = cfg.unit_overrides[u.id] || DEFAULT_STRAT[u.type] || '0';
+    const uid2 = u.id || u.name;
+    const raw = cfg.unit_overrides[uid2] || DEFAULT_STRAT[u.type] || '0';
     const cur = LEGACY_MAP[raw] || raw;
     const price = calcPrice(u.base, cur);
     const opts = STRAT_OPTS.map(o=>`<option value="${o.v}"${o.v===cur?' selected':''}>${o.l}</option>`).join('');
-    const chk = selectedIds.has(u.id) ? 'checked' : '';
-    const selCls = selectedIds.has(u.id) ? ' selected' : '';
+    const chk = selectedIds.has(uid2) ? 'checked' : '';
+    const selCls = selectedIds.has(uid2) ? ' selected' : '';
     const manualBadge = u.manual ? '<span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(139,92,246,.12);color:#8b5cf6;margin-right:4px">يدوي</span>' : '';
-    return `<div class="unit-item${selCls}" id="item-${u.id||u.name}">
-      <input type="checkbox" class="unit-check" data-id="${u.id||u.name}" ${chk} onchange="onCheck(this)">
+    if(u.manual){
+      const manualPrice = cfg.unit_overrides[uid2] && !isNaN(cfg.unit_overrides[uid2])
+                          ? cfg.unit_overrides[uid2] : '';
+      return `<div class="unit-item${selCls}" id="item-${uid2}">
+        <input type="checkbox" class="unit-check" data-id="${uid2}" ${chk} onchange="onCheck(this)">
+        <div class="unit-info">
+          <div class="unit-name">${u.name} ${manualBadge}</div>
+          <div class="unit-type">${u.type.replace(/_/g,' ')}</div>
+        </div>
+        <div class="manual-price-wrap">
+          <input type="number" class="manual-price-input" data-id="${uid2}"
+                 placeholder="السعر" value="${manualPrice}"
+                 oninput="onManualPrice(this)" min="1" max="9999">
+          <span class="manual-price-lbl">ر.س</span>
+        </div>
+      </div>`;
+    }
+    return `<div class="unit-item${selCls}" id="item-${uid2}">
+      <input type="checkbox" class="unit-check" data-id="${uid2}" ${chk} onchange="onCheck(this)">
       <div class="unit-info">
-        <div class="unit-name">${u.name} ${manualBadge}</div>
-        <div class="unit-type">${u.type.replace(/_/g,' ')}${u.label ? ' · '+u.label : ''}</div>
+        <div class="unit-name">${u.name}${u.label ? ' <span style="font-size:10px;color:var(--muted)">'+u.label+'</span>' : ''}</div>
+        <div class="unit-type">${u.type.replace(/_/g,' ')}</div>
       </div>
       <div class="unit-price">${price} ر.س</div>
-      <select class="sel ${stratClass(cur)}" data-id="${u.id||u.name}" onchange="onSel(this)">
+      <select class="sel ${stratClass(cur)}" data-id="${uid2}" onchange="onSel(this)">
         ${opts}
       </select>
     </div>`;
@@ -559,10 +585,17 @@ function renderUnits(){
 function onSel(sel){
   cfg.unit_overrides[sel.dataset.id] = sel.value;
   sel.className = 'sel ' + stratClass(sel.value);
-  // أعد حساب السعر فقط بدون إعادة رسم الكل
   const item = document.getElementById('item-'+sel.dataset.id);
   const u = UNITS.find(x=>x.id===sel.dataset.id);
   if(u) item.querySelector('.unit-price').textContent = calcPrice(u.base, sel.value) + ' ر.س';
+}
+
+function onManualPrice(inp){
+  const val = inp.value.trim();
+  if(val && !isNaN(val) && Number(val) > 0)
+    cfg.unit_overrides[inp.dataset.id] = val;
+  else
+    delete cfg.unit_overrides[inp.dataset.id];
 }
 
 function onCheck(cb){
@@ -574,7 +607,7 @@ function onCheck(cb){
   updateBulkBar();
   // حدّث "تحديد الكل" بناءً على الوحدات المرئية
   const visible = activeFilter === 'all' ? UNITS : UNITS.filter(u => u.cat === activeFilter);
-  const visibleSelected = visible.filter(u => selectedIds.has(u.id)).length;
+  const visibleSelected = visible.filter(u => selectedIds.has(u.id||u.name)).length;
   const allChk = document.getElementById('check-all');
   allChk.checked = visibleSelected === visible.length && visible.length > 0;
   allChk.indeterminate = visibleSelected > 0 && visibleSelected < visible.length;
@@ -582,8 +615,8 @@ function onCheck(cb){
 
 function toggleAll(cb){
   const visible = activeFilter === 'all' ? UNITS : UNITS.filter(u => u.cat === activeFilter);
-  if(cb.checked) visible.forEach(u => selectedIds.add(u.id));
-  else visible.forEach(u => selectedIds.delete(u.id));
+  if(cb.checked) visible.forEach(u => selectedIds.add(u.id||u.name));
+  else visible.forEach(u => selectedIds.delete(u.id||u.name));
   renderUnits();
   document.getElementById('check-all').checked = cb.checked;
 }
@@ -602,20 +635,29 @@ function updateBulkBar(){
 
 function applyBulk(){
   const v = document.getElementById('bulk-sel').value;
-  if(!v){ alert('اختر استراتيجية أولاً'); return; }
+  const manualP = document.getElementById('bulk-price').value.trim();
+  if(!v && !manualP){ alert('اختر استراتيجية أو أدخل سعراً يدوياً'); return; }
   selectedIds.forEach(id=>{
-    cfg.unit_overrides[id] = v;
-    // حدّث الـ select في الصفحة مباشرة
-    const sel = document.querySelector(`.sel[data-id="${id}"]`);
-    if(sel){ sel.value = v; sel.className = 'sel ' + stratClass(v); }
-    const item = document.getElementById('item-'+id);
-    if(item){
-      item.classList.add('selected');
-      const u = UNITS.find(x=>x.id===id);
-      if(u) item.querySelector('.unit-price').textContent = calcPrice(u.base, v) + ' ر.س';
+    const u = UNITS.find(x=>(x.id||x.name)===id);
+    if(!u) return;
+    if(u.manual){
+      // وحدة يدوية: طبّق السعر المدخل
+      if(manualP && !isNaN(manualP) && Number(manualP)>0){
+        cfg.unit_overrides[id] = manualP;
+        const inp = document.querySelector(`.manual-price-input[data-id="${id}"]`);
+        if(inp) inp.value = manualP;
+      }
+    } else if(v) {
+      cfg.unit_overrides[id] = v;
+      const sel = document.querySelector(`.sel[data-id="${id}"]`);
+      if(sel){ sel.value = v; sel.className = 'sel ' + stratClass(v); }
+      const item = document.getElementById('item-'+id);
+      if(item && item.querySelector('.unit-price'))
+        item.querySelector('.unit-price').textContent = calcPrice(u.base, v) + ' ر.س';
     }
   });
   document.getElementById('bulk-sel').value = '';
+  document.getElementById('bulk-price').value = '';
 }
 
 function clearSelection(){
