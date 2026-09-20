@@ -740,10 +740,14 @@ def main():
         except:
             pass
 
-        results = []
+        # gathern_status: unit_id -> status للاستخدام لاحقاً في نزل
+        gathern_status = {}
+        ok_rows    = []  # ✅ متاحة ومحدّثة
+        skip_rows  = []  # ⏭️ محجوزة أو مغلقة
+        err_rows   = []  # ❌ أخطاء
         updated_count = 0
-
         released_count = 0
+
         for unit in UNITS:
             if unit.get("manual_only") and not MANUAL_RUN:
                 continue
@@ -757,92 +761,107 @@ def main():
             base = std_avg if "استديو" in utype else apt_avg
             price = calc_price(base, strategy)
             status = update_price(business_page, unit, price, today)
+            gathern_status[uid] = status
             if status == "ok":
                 updated_count += 1
-                results.append(f"✅ {unit['name']} ← {price} ر.س ({strategy})")
+                ok_rows.append((unit, price))
             elif status == "booked_guest":
-                results.append(f"⏭️ {unit['name']} ← محجوزة")
+                skip_rows.append(f"⏭️ {unit['name']} ← محجوزة")
             elif status == "blocked_manual":
                 if is_midnight_release:
                     rel = release_unit(business_page, unit, today)
                     if rel == "released":
                         released_count += 1
-                        results.append(f"🔓 {unit['name']} ← تم الإتاحة")
+                        ok_rows.append((unit, price))
+                        gathern_status[uid] = "released"
                     else:
-                        results.append(f"❌ {unit['name']} ← فشل الإتاحة ({rel})")
+                        err_rows.append(f"❌ {unit['name']} ← فشل الإتاحة ({rel})")
                 else:
-                    results.append(f"🔒 {unit['name']} ← مشغولة يدوياً")
+                    skip_rows.append(f"🔒 {unit['name']} ← مشغولة يدوياً")
             else:
                 err_map = {"err_load":"ما حمّلت","err_option":"ما لقيت","err_calendar":"تقويم","err_day":"يوم؟","err_drawer":"drawer","err_ex":"خطأ"}
-                results.append(f"❌ {unit['name']} ← {err_map.get(status, status)}")
+                err_rows.append(f"❌ {unit['name']} ← {err_map.get(status, status)}")
 
         save_history(today, now_str, data, apt_avg, std_avg, updated_count, len(UNITS))
-
-        time_label = "منتصف الليل - إتاحة" if is_midnight_release else ("مساء" if is_evening else now_str)
-        sep = "━━━━━━━━━━━━━━━"
-        msg = (f"📊 تحديث {time_label}\n{sep}\n"
-               f"متوسط الشقق: {apt_avg} ر.س ({len(data['avail_apt'])} متاحة)\n"
-               f"متوسط الاستديوهات: {std_avg} ر.س ({len(data['avail_studio'])} متاحة)\n"
-               f"إشغال السوق: {data['occ_all']}% (إجمالي)\n"
-               f"  شقق: {data['occ_apt']}% ({data['apt_booked']}/{len(data['all_apt'])} مؤجرة)\n"
-               f"  استديوهات: {data['occ_studio']}% ({data['studio_booked']}/{len(data['all_studio'])} مؤجرة)\n{sep}\n"
-               + "\n".join(results)
-               + f"\n{sep}\nتم تحديث {updated_count}/{len(UNITS)} وحدة"
-               + (f" | تم إتاحة {released_count} 🔓" if is_midnight_release and released_count else "")
-               )
-        send_telegram(msg)
-        print("انتهى تحديث Gathern!")
-
         browser.close()
 
         # ── نزل (Airbnb + Booking.com) ──────────────────────
-        if not NUZUL_PHONE or not NUZUL_PASSWORD:
-            send_telegram("⚠️ نزل: بيانات الدخول غير موجودة (تحقق من NUZUL_PHONE و NUZUL_PASSWORD)")
-            print("نزل: لا توجد بيانات دخول، تخطي")
-            return
+        nuzul_ok = {}   # unit_id/name -> price
+        nuzul_err = []
 
-        try:
-            print("بدء تحديث نزل...")
-            nuzul_token = nuzul_login()
-            if not nuzul_token:
-                send_telegram("❌ نزل: فشل تسجيل الدخول")
-                return
+        if NUZUL_PHONE and NUZUL_PASSWORD:
+            try:
+                nuzul_token = nuzul_login()
+                if nuzul_token:
+                    for unit in UNITS:
+                        if unit.get("manual_only") and not MANUAL_RUN:
+                            continue
+                        uid   = unit.get("unit_id", "") or unit["name"]
+                        utype = unit["type"]
+                        override_val = overrides.get(uid) or overrides.get(unit["name"])
+                        if unit.get("manual_only") and not override_val:
+                            continue
+                        # تخطي المحجوزة في قاذران
+                        g_status = gathern_status.get(unit.get("unit_id",""))
+                        if g_status in ("booked_guest", "blocked_manual"):
+                            continue
+                        strategy = override_val or DEFAULT_STRATEGY.get(utype, "0")
+                        if is_evening and not unit.get("manual_only"):
+                            strategy = evening_downgrade(strategy)
+                        base  = std_avg if "استديو" in utype else apt_avg
+                        price = calc_price(base, strategy)
+                        status = nuzul_update_price(nuzul_token, unit, price, today)
+                        if status == "ok":
+                            nuzul_ok[uid] = price
+                        elif status == "err":
+                            nuzul_err.append(unit["name"])
+            except Exception as e:
+                print(f"نزل خطأ: {e}")
 
-            nz_results = []
-            nz_updated = 0
-            for unit in UNITS:
-                if unit.get("manual_only") and not MANUAL_RUN:
-                    continue
-                uid   = unit.get("unit_id", "") or unit["name"]
-                utype = unit["type"]
-                override_val = overrides.get(uid) or overrides.get(unit["name"])
-                # وحدات يدوية: لا تُحدَّث إلا إذا فيها سعر صريح
-                if unit.get("manual_only") and not override_val:
-                    print(f"⏭️ {unit['name']} ← لا يوجد سعر يدوي، تخطي")
-                    continue
-                strategy = override_val or DEFAULT_STRATEGY.get(utype, "0")
-                if is_evening and not unit.get("manual_only"):
-                    strategy = evening_downgrade(strategy)
-                base  = std_avg if "استديو" in utype else apt_avg
-                price = calc_price(base, strategy)
-                status = nuzul_update_price(nuzul_token, unit, price, today)
-                if status == "ok":
-                    nz_updated += 1
-                    nz_results.append(f"✅ {unit['name']} ← {price} ر.س")
-                elif status == "no_nuzul":
-                    pass
-                else:
-                    nz_results.append(f"❌ {unit['name']} ← خطأ")
+        # ── بناء الرسالة الموحّدة ──────────────────────────
+        time_label = "منتصف الليل - إتاحة" if is_midnight_release else ("مساء" if is_evening else now_str)
+        sep = "━━━━━━━━━━━━━━━"
 
-            nz_sep = "━━━━━━━━━━━━━━━"
-            nz_msg = (f"🏠 Airbnb+Booking تحديث {time_label}\n{nz_sep}\n"
-                      + "\n".join(nz_results)
-                      + f"\n{nz_sep}\nتم تحديث {nz_updated} وحدة عبر نزل")
-            send_telegram(nz_msg)
-        except Exception as e:
-            send_telegram(f"❌ نزل خطأ غير متوقع: {e}")
-            print(f"نزل خطأ: {e}")
+        ok_lines = []
+        for unit, price in ok_rows:
+            uid = unit.get("unit_id","") or unit["name"]
+            nuzul_badge = " 🟡" if uid in nuzul_ok else ""
+            suffix = " 🔓" if gathern_status.get(unit.get("unit_id","")) == "released" else ""
+            ok_lines.append(f"✅ {unit['name']} ← {price} ر.س{nuzul_badge}{suffix}")
 
+        nz_updated = len(nuzul_ok)
+        nz_err_count = len(nuzul_err)
+
+        msg = (
+            f"📊 تحديث الأسعار — {time_label}\n{sep}\n"
+            f"متوسط الشقق: {apt_avg} ر.س | الاستديوهات: {std_avg} ر.س\n"
+            f"إشغال السوق: {data['occ_all']}% (شقق {data['occ_apt']}% · استديوهات {data['occ_studio']}%)\n"
+            f"{sep}\n"
+            f"🟣 قاذران — متاحة ومحدّثة ({len(ok_lines)})\n"
+            + "\n".join(ok_lines)
+        )
+
+        if skip_rows:
+            msg += f"\n─ ─ ─ ─ ─ ─ ─\n⏭️ محجوزة أو مغلقة ({len(skip_rows)})\n" + "\n".join(skip_rows)
+
+        if err_rows:
+            msg += f"\n─ ─ ─ ─ ─ ─ ─\n⚠️ أخطاء ({len(err_rows)})\n" + "\n".join(err_rows)
+
+        if nuzul_err:
+            msg += f"\n─ ─ ─ ─ ─ ─ ─\n🟡 نزل أخطاء: " + " · ".join(nuzul_err)
+
+        summary = f"🟣{updated_count}✅"
+        if released_count:
+            summary += f" 🔓{released_count}"
+        summary += f" · 🟡{nz_updated}✅"
+        if skip_rows:
+            summary += f" · ⏭️{len(skip_rows)}"
+        if err_rows or nz_err_count:
+            summary += f" · ❌{len(err_rows)+nz_err_count}"
+
+        msg += f"\n{sep}\n{summary}"
+
+        send_telegram(msg)
         print("انتهى التحديث الكامل!")
 
 if __name__ == "__main__":
