@@ -33,6 +33,8 @@ def save_history(today, now_str, data, apt_avg, std_avg, updated, total):
 
 from config import *
 
+MANUAL_RUN = os.environ.get("MANUAL_RUN", "0") == "1"
+
 def send_telegram(msg):
     try:
         requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
@@ -736,6 +738,10 @@ def main():
 
         released_count = 0
         for unit in UNITS:
+            if unit.get("manual_only") and not MANUAL_RUN:
+                continue
+            if not unit.get("unit_id"):
+                continue
             uid = unit["unit_id"]
             utype = unit["type"]
             strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
@@ -798,7 +804,9 @@ def main():
             nz_results = []
             nz_updated = 0
             for unit in UNITS:
-                uid   = unit["unit_id"]
+                if unit.get("manual_only") and not MANUAL_RUN:
+                    continue
+                uid   = unit.get("unit_id", "")
                 utype = unit["type"]
                 strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
                 if is_evening:

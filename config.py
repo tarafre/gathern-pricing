@@ -53,8 +53,18 @@ UNITS = [
     {"name": "ترف 26", "unit_id": "241890", "chalet_id": "173065", "type": "استديو_مميز", "neighborhood": "الهدا", "nuzul_id": 49778, "nuzul_rate_plan": "ea8f9ee6-fba9-40ec-a89f-8868d02e59c4"},
     {"name": "ترف 27", "unit_id": "242428", "chalet_id": "173065", "type": "استديو_مميز", "neighborhood": "الهدا", "nuzul_id": 49779, "nuzul_rate_plan": "18323b78-7424-4b10-a378-7db3633cb3ae"},
     {"name": "ترف 28", "unit_id": "242505", "chalet_id": "173065", "type": "استديو_مميز", "neighborhood": "الهدا", "nuzul_id": 49780, "nuzul_rate_plan": "54e3aa09-4075-488e-b892-5112c53e8339"},
+    {"name": "ترف 24", "unit_id": "",       "chalet_id": "",       "type": "استديو_مميز", "neighborhood": "الهدا", "nuzul_id": 49773, "nuzul_rate_plan": "b3b7565a-4fa4-4d84-a86d-3402c5df3802"},
+    {"name": "ترف 25", "unit_id": "",       "chalet_id": "",       "type": "استديو_مميز", "neighborhood": "الهدا", "nuzul_id": 49777, "nuzul_rate_plan": "09ca9972-b769-4226-9b29-9e32506e18a4"},
     {"name": "ترف 30", "unit_id": "243973", "chalet_id": "173065", "type": "استديو_مميز", "neighborhood": "الهدا", "nuzul_id": 49782, "nuzul_rate_plan": "0012caa0-a79c-47de-9fe2-c95257052de5"},
     {"name": "ترف 31", "unit_id": "243974", "chalet_id": "173065", "type": "استديو_مميز", "neighborhood": "الهدا", "nuzul_id": 49783, "nuzul_rate_plan": "bf6052aa-e92e-4fa9-9198-6622f21755cb"},
+
+    # وحدات مدينة أخرى — لا تحديث تلقائي (manual_only)
+    {"name": "ترف 1-MJ", "unit_id": "", "chalet_id": "", "type": "شقة_مميزة", "neighborhood": "MJ", "nuzul_id": 46510, "nuzul_rate_plan": "bafaad9c-057f-47c2-8959-35e2b14ce84d", "manual_only": True},
+    {"name": "ترف 2-MJ", "unit_id": "", "chalet_id": "", "type": "شقة_مميزة", "neighborhood": "MJ", "nuzul_id": 46511, "nuzul_rate_plan": "e475dd00-43d5-4ce5-8c35-717d50d55864", "manual_only": True},
+    {"name": "ترف 3-MJ", "unit_id": "", "chalet_id": "", "type": "شقة_مميزة", "neighborhood": "MJ", "nuzul_id": 46512, "nuzul_rate_plan": "827b35ed-e3e1-489f-9e77-9733ed3402ba", "manual_only": True},
+    {"name": "ترف 4-MJ", "unit_id": "", "chalet_id": "", "type": "شقة_مميزة", "neighborhood": "MJ", "nuzul_id": 53336, "nuzul_rate_plan": "bc4c6046-daa8-4627-80e7-e9ea89704aeb", "manual_only": True},
+    {"name": "ترف 5-MJ", "unit_id": "", "chalet_id": "", "type": "شقة_مميزة", "neighborhood": "MJ", "nuzul_id": 53337, "nuzul_rate_plan": "e381b636-e09f-4861-8bff-8fa800b9776d", "manual_only": True},
+    {"name": "ترف 6-MJ", "unit_id": "", "chalet_id": "", "type": "شقة_مميزة", "neighborhood": "MJ", "nuzul_id": 53338, "nuzul_rate_plan": "99a74cc7-9501-4458-a693-36509f7f90d2", "manual_only": True},
 ]
 
 # الاستراتيجية الافتراضية لكل نوع (نسبة مئوية)

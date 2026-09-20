@@ -21,6 +21,7 @@ jobs:
       TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
       NUZUL_PHONE:        ${{ secrets.NUZUL_PHONE }}
       NUZUL_PASSWORD:     ${{ secrets.NUZUL_PASSWORD }}
+      MANUAL_RUN:         ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
       DISPLAY: ':99'
 
     steps:

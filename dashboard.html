@@ -200,6 +200,7 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
       <button class="filter-tab" data-cat="apt1" onclick="setFilter('apt1')">غرفة وصالة</button>
       <button class="filter-tab" data-cat="apt2" onclick="setFilter('apt2')">غرفتين وصالة</button>
       <button class="filter-tab" data-cat="apt1x" onclick="setFilter('apt1x')">جاكوزي ✦</button>
+      <button class="filter-tab" data-cat="mj" onclick="setFilter('mj')" style="border-color:#8b5cf6;color:#8b5cf6">مدينة أخرى</button>
     </div>
     <div class="select-all-row">
       <input type="checkbox" id="check-all" class="unit-check" onchange="toggleAll(this)">
@@ -346,11 +347,20 @@ const UNITS = [
   {name:'ترف 21', id:'242199', type:'شقة_مميزة',    base:'apt', cat:'apt1'},
   {name:'ترف 22', id:'242211', type:'شقة_غرفتين',   base:'apt', cat:'apt2'},
   {name:'ترف 23', id:'243598', type:'شقة_غرفتين',   base:'apt', cat:'apt2'},
+  {name:'ترف 24', id:'',       type:'استديو_مميز',  base:'std', cat:'std'},
+  {name:'ترف 25', id:'',       type:'استديو_مميز',  base:'std', cat:'std'},
   {name:'ترف 26', id:'241890', type:'استديو_مميز',  base:'std', cat:'std'},
   {name:'ترف 27', id:'242428', type:'استديو_مميز',  base:'std', cat:'std'},
   {name:'ترف 28', id:'242505', type:'استديو_مميز',  base:'std', cat:'std'},
   {name:'ترف 30', id:'243973', type:'استديو_مميز',  base:'std', cat:'std'},
   {name:'ترف 31', id:'243974', type:'استديو_مميز',  base:'std', cat:'std'},
+  // وحدات مدينة أخرى — تحديث يدوي فقط
+  {name:'ترف 1-MJ', id:'', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
+  {name:'ترف 2-MJ', id:'', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
+  {name:'ترف 3-MJ', id:'', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
+  {name:'ترف 4-MJ', id:'', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
+  {name:'ترف 5-MJ', id:'', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
+  {name:'ترف 6-MJ', id:'', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
 ];
 
 const DEFAULT_STRAT = {
@@ -530,14 +540,15 @@ function renderUnits(){
     const opts = STRAT_OPTS.map(o=>`<option value="${o.v}"${o.v===cur?' selected':''}>${o.l}</option>`).join('');
     const chk = selectedIds.has(u.id) ? 'checked' : '';
     const selCls = selectedIds.has(u.id) ? ' selected' : '';
-    return `<div class="unit-item${selCls}" id="item-${u.id}">
-      <input type="checkbox" class="unit-check" data-id="${u.id}" ${chk} onchange="onCheck(this)">
+    const manualBadge = u.manual ? '<span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(139,92,246,.12);color:#8b5cf6;margin-right:4px">يدوي</span>' : '';
+    return `<div class="unit-item${selCls}" id="item-${u.id||u.name}">
+      <input type="checkbox" class="unit-check" data-id="${u.id||u.name}" ${chk} onchange="onCheck(this)">
       <div class="unit-info">
-        <div class="unit-name">${u.name}</div>
-        <div class="unit-type">${u.type.replace(/_/g,' ')}</div>
+        <div class="unit-name">${u.name} ${manualBadge}</div>
+        <div class="unit-type">${u.type.replace(/_/g,' ')}${u.label ? ' · '+u.label : ''}</div>
       </div>
       <div class="unit-price">${price} ر.س</div>
-      <select class="sel ${stratClass(cur)}" data-id="${u.id}" onchange="onSel(this)">
+      <select class="sel ${stratClass(cur)}" data-id="${u.id||u.name}" onchange="onSel(this)">
         ${opts}
       </select>
     </div>`;
