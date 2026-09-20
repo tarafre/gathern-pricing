@@ -19,9 +19,8 @@ jobs:
       GATHERN_PHONE:      ${{ secrets.GATHERN_PHONE }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
-      AIRBNB_EMAIL:       ${{ secrets.AIRBNB_EMAIL }}
-      AIRBNB_PASSWORD:    ${{ secrets.AIRBNB_PASSWORD }}
-      AIRBNB_SESSION:     ${{ secrets.AIRBNB_SESSION }}
+      NUZUL_PHONE:        ${{ secrets.NUZUL_PHONE }}
+      NUZUL_PASSWORD:     ${{ secrets.NUZUL_PASSWORD }}
       DISPLAY: ':99'
 
     steps:
@@ -47,13 +46,6 @@ jobs:
           key: gathern-session-${{ github.run_id }}
           restore-keys: |
             gathern-session-
-
-      - name: Restore Airbnb session from secret
-        run: |
-          if [ -n "$AIRBNB_SESSION" ] && [ ! -f airbnb_session_state.json ]; then
-            echo "$AIRBNB_SESSION" | base64 -d > airbnb_session_state.json
-            echo "Airbnb session restored from secret"
-          fi
 
       - name: Start virtual display
         run: |

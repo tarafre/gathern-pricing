@@ -400,6 +400,60 @@ def update_price(page, unit, price, today):
         print(f"  خطأ {name}: {e}")
         return "err_ex"
 
+# ── نزل API ─────────────────────────────────────────────────────────────────
+
+def nuzul_login():
+    """تسجيل الدخول على نزل وإرجاع Bearer token."""
+    try:
+        r = requests.post(
+            "https://nzl-backend.com/api/login",
+            json={"mobile_number": NUZUL_PHONE, "password": NUZUL_PASSWORD},
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            timeout=20
+        )
+        r.raise_for_status()
+        data = r.json()
+        token = (data.get("token") or data.get("data", {}).get("token")
+                 or data.get("access_token") or data.get("data", {}).get("access_token", ""))
+        if not token:
+            print(f"نزل: ما لقيت token في الرد: {list(data.keys())}")
+        return token
+    except Exception as e:
+        print(f"نزل: فشل تسجيل الدخول: {e}")
+        return ""
+
+def nuzul_update_price(token, unit, price, today):
+    """يحدّث سعر اليوم على Airbnb+Booking عبر نزل/Channex."""
+    nuzul_id   = unit.get("nuzul_id", 0)
+    rate_plan  = unit.get("nuzul_rate_plan", "")
+    if not nuzul_id or not rate_plan:
+        return "no_nuzul"
+    try:
+        r = requests.put(
+            f"https://{NUZUL_BACKEND}/api/channex/update-restrictions",
+            json={
+                "property_id": nuzul_id,
+                "date_from": today,
+                "date_to": today,
+                "rate": str(price),
+                "channex_rate_plan_id": rate_plan,
+            },
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            timeout=20
+        )
+        if r.status_code == 200:
+            return "ok"
+        print(f"  نزل {unit['name']}: status {r.status_code}")
+        return "err"
+    except Exception as e:
+        print(f"  نزل خطأ {unit['name']}: {e}")
+        return "err"
+
+
 AIRBNB_SESSION_FILE = os.path.join(BASE_DIR, "airbnb_session_state.json")
 
 def airbnb_login(page):
@@ -726,65 +780,49 @@ def main():
         send_telegram(msg)
         print("انتهى تحديث Gathern!")
 
-        # ── Airbnb ──────────────────────────────────────────
-        if not AIRBNB_EMAIL or not AIRBNB_PASSWORD:
-            send_telegram("⚠️ Airbnb: بيانات الدخول غير موجودة (تحقق من الـ Secrets)")
-            print("Airbnb: لا توجد بيانات دخول، تخطي")
-            browser.close()
+        browser.close()
+
+        # ── نزل (Airbnb + Booking.com) ──────────────────────
+        if not NUZUL_PHONE or not NUZUL_PASSWORD:
+            send_telegram("⚠️ نزل: بيانات الدخول غير موجودة (تحقق من NUZUL_PHONE و NUZUL_PASSWORD)")
+            print("نزل: لا توجد بيانات دخول، تخطي")
             return
 
         try:
-            print("بدء تحديث Airbnb...")
-            if os.path.exists(AIRBNB_SESSION_FILE):
-                ab_context = browser.new_context(storage_state=AIRBNB_SESSION_FILE)
-                print("Airbnb: تم استعادة الجلسة")
-            else:
-                ab_context = browser.new_context()
+            print("بدء تحديث نزل...")
+            nuzul_token = nuzul_login()
+            if not nuzul_token:
+                send_telegram("❌ نزل: فشل تسجيل الدخول")
+                return
 
-            ab_page = ab_context.new_page()
-            ab_logged = airbnb_login(ab_page)
-
-            if ab_logged:
-                try:
-                    ab_context.storage_state(path=AIRBNB_SESSION_FILE)
-                except:
+            nz_results = []
+            nz_updated = 0
+            for unit in UNITS:
+                uid   = unit["unit_id"]
+                utype = unit["type"]
+                strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
+                if is_evening:
+                    strategy = evening_downgrade(strategy)
+                base  = std_avg if "استديو" in utype else apt_avg
+                price = calc_price(base, strategy)
+                status = nuzul_update_price(nuzul_token, unit, price, today)
+                if status == "ok":
+                    nz_updated += 1
+                    nz_results.append(f"✅ {unit['name']} ← {price} ر.س")
+                elif status == "no_nuzul":
                     pass
+                else:
+                    nz_results.append(f"❌ {unit['name']} ← خطأ")
 
-                ab_results = []
-                ab_updated = 0
-                for unit in UNITS:
-                    airbnb_id = unit.get("airbnb_id", "")
-                    if not airbnb_id:
-                        continue
-                    uid = unit["unit_id"]
-                    utype = unit["type"]
-                    strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
-                    if is_evening:
-                        strategy = evening_downgrade(strategy)
-                    base = std_avg if "استديو" in utype else apt_avg
-                    price = calc_price(base, strategy)
-                    status = airbnb_update_price(ab_page, unit, price, today)
-                    if status == "ok":
-                        ab_updated += 1
-                        ab_results.append(f"✅ {unit['name']} ← {price} ر.س")
-                    elif status == "no_airbnb":
-                        pass
-                    else:
-                        err_map = {"err_session":"جلسة منتهية","err_day":"تاريخ؟","err_panel":"panel","err_save":"حفظ","err_ex":"خطأ"}
-                        ab_results.append(f"❌ {unit['name']} ← {err_map.get(status, status)}")
-
-                ab_sep = "━━━━━━━━━━━━━━━"
-                ab_msg = (f"🏠 Airbnb تحديث {time_label}\n{ab_sep}\n"
-                          + "\n".join(ab_results)
-                          + f"\n{ab_sep}\nتم تحديث {ab_updated} وحدة على Airbnb")
-                send_telegram(ab_msg)
-            else:
-                send_telegram("❌ Airbnb: فشل تسجيل الدخول")
+            nz_sep = "━━━━━━━━━━━━━━━"
+            nz_msg = (f"🏠 Airbnb+Booking تحديث {time_label}\n{nz_sep}\n"
+                      + "\n".join(nz_results)
+                      + f"\n{nz_sep}\nتم تحديث {nz_updated} وحدة عبر نزل")
+            send_telegram(nz_msg)
         except Exception as e:
-            send_telegram(f"❌ Airbnb خطأ غير متوقع: {e}")
-            print(f"Airbnb خطأ: {e}")
+            send_telegram(f"❌ نزل خطأ غير متوقع: {e}")
+            print(f"نزل خطأ: {e}")
 
-        browser.close()
         print("انتهى التحديث الكامل!")
 
 if __name__ == "__main__":
