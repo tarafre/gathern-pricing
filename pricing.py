@@ -234,23 +234,22 @@ def login(page):
                     for i, d in enumerate(list(last_msg)):
                         otp_boxes[i].fill(d)
                         time.sleep(0.3)
-                elif len(otp_boxes) >= 1:
-                    # خانة واحدة للـ OTP كاملاً
-                    otp_boxes[0].fill("")
-                    otp_boxes[0].type(last_msg, delay=80)
-                    time.sleep(0.5)
-                elif len(all_boxes) >= len(last_msg):
-                    # fallback: استخدم كل الـ inputs
-                    for i, d in enumerate(list(last_msg)):
-                        all_boxes[i].fill(d)
-                        time.sleep(0.3)
-                elif len(all_boxes) >= 1:
-                    all_boxes[0].fill("")
-                    all_boxes[0].type(last_msg, delay=80)
-                    time.sleep(0.5)
+                else:
+                    # input واحد — جرب tel/number/text بالترتيب، وإلا أول input
+                    otp_input = (
+                        page.locator("input[type='tel']").first
+                        if page.locator("input[type='tel']").count() > 0
+                        else page.locator("input[type='number']").first
+                        if page.locator("input[type='number']").count() > 0
+                        else all_boxes[0] if all_boxes else None
+                    )
+                    if otp_input:
+                        otp_input.fill("")
+                        otp_input.type(last_msg, delay=80)
+                        time.sleep(0.5)
                 # اضغط Enter في آخر input أو جرب زر Submit
                 try:
-                    boxes[-1].press("Enter")
+                    all_boxes[-1].press("Enter")
                 except:
                     pass
                 for btn_sel in ["button[type='submit']", "button:has-text('تحقق')", "button:has-text('Verify')", "button:has-text('تأكيد')", "button:has-text('دخول')", "button"]:
