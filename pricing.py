@@ -231,7 +231,19 @@ def login(page):
                     if i < len(boxes):
                         boxes[i].fill(d)
                         time.sleep(0.3)
-                page.locator("button[type='submit']").first.click()
+                # اضغط Enter في آخر input أو جرب زر Submit
+                try:
+                    boxes[-1].press("Enter")
+                except:
+                    pass
+                for btn_sel in ["button[type='submit']", "button:has-text('تحقق')", "button:has-text('Verify')", "button:has-text('تأكيد')", "button:has-text('دخول')", "button"]:
+                    try:
+                        btn = page.locator(btn_sel).first
+                        btn.wait_for(state="visible", timeout=3000)
+                        btn.click()
+                        break
+                    except:
+                        continue
                 time.sleep(4)
                 if on_app(page):
                     print("تم تسجيل الدخول!")
