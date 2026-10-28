@@ -228,6 +228,15 @@ def login(page):
                 # جرب خانات OTP المنفصلة أولاً (maxlength=1)
                 otp_boxes = page.locator("input[maxlength='1']").all()
                 all_boxes = page.locator("input").all()
+                # debug: اطبع نوع كل input
+                for ii, bx in enumerate(all_boxes):
+                    try:
+                        t = bx.get_attribute("type") or "text"
+                        ml = bx.get_attribute("maxlength") or "-"
+                        ph = bx.get_attribute("placeholder") or "-"
+                        vis = bx.is_visible()
+                        print(f"  input[{ii}] type={t} maxlength={ml} placeholder={ph} visible={vis}")
+                    except: pass
                 print(f"  otp_boxes: {len(otp_boxes)} | all_inputs: {len(all_boxes)}")
                 if len(otp_boxes) >= len(last_msg):
                     # خانات منفصلة لكل رقم
