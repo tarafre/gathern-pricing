@@ -227,10 +227,16 @@ def login(page):
                 print(f"  OTP: {last_msg} | URL: {page.url}")
                 boxes = page.locator("input").all()
                 print(f"  inputs: {len(boxes)}")
-                for i, d in enumerate(list(last_msg)):
-                    if i < len(boxes):
+                if len(boxes) >= len(last_msg):
+                    # boxes منفصلة — رقم لكل خانة
+                    for i, d in enumerate(list(last_msg)):
                         boxes[i].fill(d)
                         time.sleep(0.3)
+                elif len(boxes) >= 1:
+                    # input واحد — ندخل الكود كاملاً
+                    boxes[0].fill("")
+                    boxes[0].type(last_msg, delay=80)
+                    time.sleep(0.5)
                 # اضغط Enter في آخر input أو جرب زر Submit
                 try:
                     boxes[-1].press("Enter")
