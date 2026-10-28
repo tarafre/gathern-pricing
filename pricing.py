@@ -225,17 +225,28 @@ def login(page):
             if last_msg.isdigit() and 4 <= len(last_msg) <= 6:
                 last_id = update["update_id"]
                 print(f"  OTP: {last_msg} | URL: {page.url}")
-                boxes = page.locator("input").all()
-                print(f"  inputs: {len(boxes)}")
-                if len(boxes) >= len(last_msg):
-                    # boxes منفصلة — رقم لكل خانة
+                # جرب خانات OTP المنفصلة أولاً (maxlength=1)
+                otp_boxes = page.locator("input[maxlength='1']").all()
+                all_boxes = page.locator("input").all()
+                print(f"  otp_boxes: {len(otp_boxes)} | all_inputs: {len(all_boxes)}")
+                if len(otp_boxes) >= len(last_msg):
+                    # خانات منفصلة لكل رقم
                     for i, d in enumerate(list(last_msg)):
-                        boxes[i].fill(d)
+                        otp_boxes[i].fill(d)
                         time.sleep(0.3)
-                elif len(boxes) >= 1:
-                    # input واحد — ندخل الكود كاملاً
-                    boxes[0].fill("")
-                    boxes[0].type(last_msg, delay=80)
+                elif len(otp_boxes) >= 1:
+                    # خانة واحدة للـ OTP كاملاً
+                    otp_boxes[0].fill("")
+                    otp_boxes[0].type(last_msg, delay=80)
+                    time.sleep(0.5)
+                elif len(all_boxes) >= len(last_msg):
+                    # fallback: استخدم كل الـ inputs
+                    for i, d in enumerate(list(last_msg)):
+                        all_boxes[i].fill(d)
+                        time.sleep(0.3)
+                elif len(all_boxes) >= 1:
+                    all_boxes[0].fill("")
+                    all_boxes[0].type(last_msg, delay=80)
                     time.sleep(0.5)
                 # اضغط Enter في آخر input أو جرب زر Submit
                 try:
