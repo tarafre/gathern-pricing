@@ -239,23 +239,20 @@ def login(page):
                     except: pass
                 print(f"  otp_boxes: {len(otp_boxes)} | all_inputs: {len(all_boxes)}")
                 if len(otp_boxes) >= len(last_msg):
-                    # خانات منفصلة لكل رقم
+                    # خانات منفصلة بـ maxlength=1
                     for i, d in enumerate(list(last_msg)):
                         otp_boxes[i].fill(d)
                         time.sleep(0.3)
-                else:
-                    # input واحد — جرب tel/number/text بالترتيب، وإلا أول input
-                    otp_input = (
-                        page.locator("input[type='tel']").first
-                        if page.locator("input[type='tel']").count() > 0
-                        else page.locator("input[type='number']").first
-                        if page.locator("input[type='number']").count() > 0
-                        else all_boxes[0] if all_boxes else None
-                    )
-                    if otp_input:
-                        otp_input.fill("")
-                        otp_input.type(last_msg, delay=80)
-                        time.sleep(0.5)
+                elif len(all_boxes) == len(last_msg):
+                    # عدد الـ inputs يساوي عدد أرقام الـ OTP — خانة لكل رقم
+                    for i, d in enumerate(list(last_msg)):
+                        all_boxes[i].fill(d)
+                        time.sleep(0.3)
+                elif all_boxes:
+                    # input واحد — أدخل الكود كاملاً
+                    all_boxes[0].fill("")
+                    all_boxes[0].type(last_msg, delay=80)
+                    time.sleep(0.5)
                 # اضغط Enter في آخر input أو جرب زر Submit
                 try:
                     all_boxes[-1].press("Enter")
@@ -272,13 +269,6 @@ def login(page):
                 time.sleep(4)
                 if on_app(page):
                     print("تم تسجيل الدخول!")
-                    return True
-                # reload الصفحة — أحياناً يحتاجها بعد OTP
-                print("  جاري reload الصفحة...")
-                page.reload(wait_until="domcontentloaded", timeout=30000)
-                time.sleep(3)
-                if on_app(page):
-                    print("تم تسجيل الدخول بعد reload!")
                     return True
         except Exception as e:
             print(f"خطأ OTP: {e}")
