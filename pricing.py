@@ -192,9 +192,18 @@ def login(page):
     page.goto("https://business.gathern.co/login")
     page.wait_for_load_state("domcontentloaded", timeout=60000)
     time.sleep(3)
-    page.locator("input").first.fill(GATHERN_PHONE)
+    page.evaluate("""(phone) => {
+        const inp = document.querySelector('input[type="tel"]') || document.querySelector('input');
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(inp, phone);
+        inp.dispatchEvent(new Event('input', {bubbles: true}));
+        inp.dispatchEvent(new Event('change', {bubbles: true}));
+    }""", GATHERN_PHONE)
     time.sleep(1)
-    page.locator("button[type='submit']").first.click()
+    page.evaluate("""() => {
+        const btn = document.querySelector("button[type='submit']") || document.querySelector('button');
+        if (btn) btn.click();
+    }""")
     time.sleep(4)
 
     # دخل مباشرة بدون OTP؟
@@ -225,53 +234,52 @@ def login(page):
             if last_msg.isdigit() and 4 <= len(last_msg) <= 6:
                 last_id = update["update_id"]
                 print(f"  OTP: {last_msg} | URL: {page.url}")
-                # جرب خانات OTP المنفصلة أولاً (maxlength=1)
-                otp_boxes = page.locator("input[maxlength='1']").all()
-                all_boxes = page.locator("input").all()
-                # debug: اطبع نوع كل input
-                for ii, bx in enumerate(all_boxes):
-                    try:
-                        t = bx.get_attribute("type") or "text"
-                        ml = bx.get_attribute("maxlength") or "-"
-                        ph = bx.get_attribute("placeholder") or "-"
-                        vis = bx.is_visible()
-                        print(f"  input[{ii}] type={t} maxlength={ml} placeholder={ph} visible={vis}")
-                    except: pass
-                print(f"  otp_boxes: {len(otp_boxes)} | all_inputs: {len(all_boxes)}")
-                boxes_to_use = otp_boxes if len(otp_boxes) >= len(last_msg) else all_boxes
-                print(f"  using {len(boxes_to_use)} boxes")
-                if len(boxes_to_use) >= len(last_msg):
-                    # خانات منفصلة — click ثم type لكل رقم
-                    for i, d in enumerate(list(last_msg)):
-                        try:
-                            boxes_to_use[i].click(timeout=5000)
-                            boxes_to_use[i].type(d, delay=50)
-                            print(f"  filled box[{i}]={d}")
-                            time.sleep(0.2)
-                        except Exception as fe:
-                            print(f"  box[{i}] error: {fe}")
-                elif all_boxes:
-                    # input واحد
-                    try:
-                        all_boxes[0].click(timeout=5000)
-                        all_boxes[0].type(last_msg, delay=80)
-                        print(f"  filled single box")
-                    except Exception as fe:
-                        print(f"  single box error: {fe}")
-                    time.sleep(0.5)
-                # اضغط Enter في آخر input أو جرب زر Submit
-                try:
-                    all_boxes[-1].press("Enter")
-                except:
-                    pass
-                for btn_sel in ["button[type='submit']", "button:has-text('تحقق')", "button:has-text('Verify')", "button:has-text('تأكيد')", "button:has-text('دخول')", "button"]:
-                    try:
-                        btn = page.locator(btn_sel).first
-                        btn.wait_for(state="visible", timeout=3000)
-                        btn.click()
-                        break
-                    except:
-                        continue
+                # استخدم JavaScript مباشرة لتجاوز مشكلة React-controlled inputs
+                filled = page.evaluate("""(otp) => {
+                    const inputs = Array.from(document.querySelectorAll('input')).filter(
+                        inp => inp.type === 'text' && inp.placeholder === '*'
+                    );
+                    const setter = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype, 'value'
+                    ).set;
+                    const digits = otp.split('');
+                    if (inputs.length >= digits.length) {
+                        digits.forEach((d, i) => {
+                            setter.call(inputs[i], d);
+                            inputs[i].dispatchEvent(new Event('input', {bubbles: true}));
+                            inputs[i].dispatchEvent(new Event('change', {bubbles: true}));
+                        });
+                        return 'filled:' + inputs.length;
+                    }
+                    // fallback: single input with full OTP
+                    const allInputs = document.querySelectorAll('input');
+                    if (allInputs.length > 0) {
+                        const inp = allInputs[0];
+                        setter.call(inp, otp);
+                        inp.dispatchEvent(new Event('input', {bubbles: true}));
+                        inp.dispatchEvent(new Event('change', {bubbles: true}));
+                        return 'fallback:single';
+                    }
+                    return 'no-inputs';
+                }""", last_msg)
+                print(f"  JS fill result: {filled}")
+                time.sleep(1)
+                # اضغط Submit أو Enter
+                submitted = page.evaluate("""() => {
+                    const btn = document.querySelector("button[type='submit']")
+                        || Array.from(document.querySelectorAll('button'))
+                            .find(b => ['تحقق','Verify','تأكيد','دخول','إرسال'].some(t => b.textContent.includes(t)));
+                    if (btn) { btn.click(); return 'btn:' + btn.textContent.trim(); }
+                    // Enter على آخر input OTP
+                    const inputs = Array.from(document.querySelectorAll('input'));
+                    if (inputs.length > 0) {
+                        inputs[inputs.length-1].dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',bubbles:true}));
+                        inputs[inputs.length-1].dispatchEvent(new KeyboardEvent('keyup', {key:'Enter',bubbles:true}));
+                        return 'enter';
+                    }
+                    return 'nothing';
+                }""")
+                print(f"  JS submit result: {submitted}")
                 time.sleep(4)
                 if on_app(page):
                     print("تم تسجيل الدخول!")
