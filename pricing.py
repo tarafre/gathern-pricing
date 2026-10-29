@@ -273,6 +273,13 @@ def login(page):
                 if on_app(page):
                     print("تم تسجيل الدخول!")
                     return True
+                # reload الصفحة — أحياناً يحتاجها بعد OTP
+                print("  جاري reload الصفحة...")
+                page.reload(wait_until="domcontentloaded", timeout=30000)
+                time.sleep(3)
+                if on_app(page):
+                    print("تم تسجيل الدخول بعد reload!")
+                    return True
         except Exception as e:
             print(f"خطأ OTP: {e}")
     return on_app(page)
