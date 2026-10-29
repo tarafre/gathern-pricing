@@ -238,20 +238,26 @@ def login(page):
                         print(f"  input[{ii}] type={t} maxlength={ml} placeholder={ph} visible={vis}")
                     except: pass
                 print(f"  otp_boxes: {len(otp_boxes)} | all_inputs: {len(all_boxes)}")
-                if len(otp_boxes) >= len(last_msg):
-                    # خانات منفصلة بـ maxlength=1
+                boxes_to_use = otp_boxes if len(otp_boxes) >= len(last_msg) else all_boxes
+                print(f"  using {len(boxes_to_use)} boxes")
+                if len(boxes_to_use) >= len(last_msg):
+                    # خانات منفصلة — click ثم type لكل رقم
                     for i, d in enumerate(list(last_msg)):
-                        otp_boxes[i].fill(d)
-                        time.sleep(0.3)
-                elif len(all_boxes) == len(last_msg):
-                    # عدد الـ inputs يساوي عدد أرقام الـ OTP — خانة لكل رقم
-                    for i, d in enumerate(list(last_msg)):
-                        all_boxes[i].fill(d)
-                        time.sleep(0.3)
+                        try:
+                            boxes_to_use[i].click(timeout=5000)
+                            boxes_to_use[i].type(d, delay=50)
+                            print(f"  filled box[{i}]={d}")
+                            time.sleep(0.2)
+                        except Exception as fe:
+                            print(f"  box[{i}] error: {fe}")
                 elif all_boxes:
-                    # input واحد — أدخل الكود كاملاً
-                    all_boxes[0].fill("")
-                    all_boxes[0].type(last_msg, delay=80)
+                    # input واحد
+                    try:
+                        all_boxes[0].click(timeout=5000)
+                        all_boxes[0].type(last_msg, delay=80)
+                        print(f"  filled single box")
+                    except Exception as fe:
+                        print(f"  single box error: {fe}")
                     time.sleep(0.5)
                 # اضغط Enter في آخر input أو جرب زر Submit
                 try:
