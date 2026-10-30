@@ -764,6 +764,11 @@ def main():
         if os.path.exists(SESSION_FILE):
             context = browser.new_context(storage_state=SESSION_FILE)
             print("تم استعادة الجلسة المحفوظة")
+            # افتح صفحة gathern مبكراً لتفعيل الـ localStorage قبل أي شيء آخر
+            _warm = context.new_page()
+            _warm.goto("https://business.gathern.co/app/calendar", wait_until="domcontentloaded", timeout=30000)
+            time.sleep(2)
+            _warm.close()
         else:
             context = browser.new_context()
         data = collect_prices()
