@@ -189,7 +189,7 @@ def login(page):
         return True
 
     # نسجّل دخول
-    page.goto("https://business.gathern.co/login")
+    page.goto("https://business.gathern.co/login?redirect=/app")
     page.wait_for_load_state("domcontentloaded", timeout=60000)
     time.sleep(3)
     page.evaluate("""(phone) => {

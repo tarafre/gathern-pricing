@@ -5,7 +5,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch(headless=False)
     ctx = browser.new_context()
     page = ctx.new_page()
-    page.goto("https://business.gathern.co/login")
+    page.goto("https://business.gathern.co/login?redirect=/app")
     print("سجّل دخولك على Gathern في النافذة...")
     print("بعد ما تسجّل الدخول بنجاح، ارجع هنا واضغط Enter")
     input()
