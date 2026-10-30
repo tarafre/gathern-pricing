@@ -22,6 +22,7 @@ jobs:
       NUZUL_PHONE:        ${{ secrets.NUZUL_PHONE }}
       NUZUL_PASSWORD:     ${{ secrets.NUZUL_PASSWORD }}
       MANUAL_RUN:         ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+      GATHERN_SESSION:    ${{ secrets.GATHERN_SESSION }}
       DISPLAY: ':99'
 
     steps:
@@ -47,6 +48,10 @@ jobs:
           key: gathern-session-${{ github.run_id }}
           restore-keys: |
             gathern-session-
+
+      - name: Inject Gathern session
+        if: env.GATHERN_SESSION != ''
+        run: echo "$GATHERN_SESSION" | base64 -d > session_state.json
 
       - name: Start virtual display
         run: |
