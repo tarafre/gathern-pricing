@@ -51,7 +51,7 @@ jobs:
 
       - name: Inject Gathern session
         if: env.GATHERN_SESSION != ''
-        run: echo "$GATHERN_SESSION" | tr -d ' \n\r' | base64 -d > session_state.json
+        run: python3 -c "import base64,os; open('session_state.json','wb').write(base64.b64decode(os.environ['GATHERN_SESSION'].strip()))"
 
       - name: Start virtual display
         run: |
