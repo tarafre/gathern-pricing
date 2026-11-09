@@ -22,7 +22,8 @@ jobs:
       NUZUL_PHONE:        ${{ secrets.NUZUL_PHONE }}
       NUZUL_PASSWORD:     ${{ secrets.NUZUL_PASSWORD }}
       MANUAL_RUN:         ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
-      GATHERN_SESSION:    ${{ secrets.GATHERN_SESSION }}
+      GB_JWT:             ${{ secrets.GB_JWT }}
+      GB_JWT_REFRESH:     ${{ secrets.GB_JWT_REFRESH }}
       DISPLAY: ':99'
 
     steps:
@@ -39,37 +40,23 @@ jobs:
           playwright install chromium
           playwright install-deps chromium
 
-      - name: Restore browser session
+      - name: Restore Airbnb session
         uses: actions/cache@v4
         with:
-          path: |
-            session_state.json
-            airbnb_session_state.json
-          key: gathern-session-${{ github.run_id }}
+          path: airbnb_session_state.json
+          key: airbnb-session-${{ github.run_id }}
           restore-keys: |
-            gathern-session-
-
-      - name: Inject Gathern session
-        if: env.GATHERN_SESSION != ''
-        run: python3 -c "import base64,os; open('session_state.json','wb').write(base64.b64decode(os.environ['GATHERN_SESSION'].strip()))"
-
-      - name: Start virtual display
-        run: |
-          sudo apt-get install -y xvfb
-          Xvfb :99 -screen 0 1280x720x24 &
-          sleep 2
+            airbnb-session-
 
       - name: Run pricing tool
         run: python pricing.py
 
-      - name: Save browser session
+      - name: Save Airbnb session
         uses: actions/cache/save@v4
         if: always()
         with:
-          path: |
-            session_state.json
-            airbnb_session_state.json
-          key: gathern-session-${{ github.run_id }}
+          path: airbnb_session_state.json
+          key: airbnb-session-${{ github.run_id }}
 
       - name: Save history data
         if: always()

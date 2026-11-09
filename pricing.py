@@ -174,6 +174,90 @@ def collect_prices(_page=None):
         "total_booked": total_booked, "total_all": total_all,
     }
 
+# ── Gathern API (بدون متصفح) ────────────────────────────────────────────────
+
+def gathern_refresh_token():
+    """يجدّد الـ access token باستخدام refresh token."""
+    refresh = os.environ.get("GB_JWT_REFRESH", "")
+    if not refresh:
+        return os.environ.get("GB_JWT", "")
+    try:
+        r = requests.post(
+            "https://cauth.gathern.co/oauth/token",
+            json={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh,
+                "client_id": "d420139f2c238e94216f",
+            },
+            headers={"Content-Type": "application/json", "Origin": "https://business.gathern.co"},
+            timeout=20
+        )
+        if r.status_code == 200:
+            data = r.json()
+            new_jwt = data.get("access_token") or data.get("token", "")
+            if new_jwt:
+                print("تجديد JWT نجح")
+                return new_jwt
+    except Exception as e:
+        print(f"تجديد JWT فشل: {e}")
+    return os.environ.get("GB_JWT", "")
+
+def gathern_check_booking(jwt, unit_id, today):
+    """يتحقق من حالة الوحدة عبر API — يرجع 'free' أو 'booked_guest' أو 'blocked'."""
+    try:
+        r = requests.get(
+            "https://msapi.gathern.co/pricing/api/v1/pricing/",
+            headers={
+                "Authorization": f"Bearer {jwt}",
+                "Origin": "https://business.gathern.co",
+                "Referer": "https://business.gathern.co/",
+            },
+            params={"unit_id": unit_id, "date": today},
+            timeout=15
+        )
+        if r.status_code == 200:
+            data = r.json().get("data", {})
+            if data.get("is_busy", 0) == 1:
+                return "booked_guest"
+            return "free"
+    except:
+        pass
+    return "free"
+
+def gathern_update_price_api(jwt, unit, price, today):
+    """يحدّث سعر اليوم على قاذران عبر API مباشرة (بدون Playwright)."""
+    unit_id = str(unit["unit_id"])
+    name = unit["name"]
+    status = gathern_check_booking(jwt, unit["unit_id"], today)
+    if status == "booked_guest":
+        print(f"  {name}: محجوزة")
+        return "booked_guest"
+    try:
+        r = requests.put(
+            "https://msapi.gathern.co/pricing/api/v1/pricing/dates/update",
+            headers={
+                "Authorization": f"Bearer {jwt}",
+                "Content-Type": "application/json",
+                "Origin": "https://business.gathern.co",
+                "Referer": "https://business.gathern.co/",
+            },
+            json={"unit_id": unit_id, "dates": {today: price}},
+            timeout=20
+        )
+        if r.status_code == 200 and r.json().get("success"):
+            print(f"  {name} -> {price} ر.س ✓")
+            return "ok"
+        elif r.status_code == 401:
+            print(f"  {name}: JWT منتهي")
+            return "expired"
+        print(f"  {name}: status {r.status_code} {r.text[:100]}")
+        return "err"
+    except Exception as e:
+        print(f"  خطأ {name}: {e}")
+        return "err_ex"
+
+# ── Browser helpers (للـ Airbnb وإتاحة الوحدات) ─────────────────────────────
+
 def on_app(page):
     """هل نحن داخل لوحة التحكم؟ بدون تنقل."""
     return "business.gathern.co/app" in page.url and "/login" not in page.url
@@ -756,87 +840,79 @@ def main():
 
     is_evening = hour >= evening_hour
 
-    SESSION_FILE = os.path.join(BASE_DIR, "session_state.json")
+    # ── Gathern: تجديد الـ JWT وتحديث الأسعار عبر API ──────────────────────
+    gathern_jwt = gathern_refresh_token()
+    if not gathern_jwt:
+        send_telegram("⚠️ GB_JWT غير موجود — أضفه كـ GitHub Secret")
+        return
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        # حمّل الجلسة المحفوظة إذا وُجدت
-        if os.path.exists(SESSION_FILE):
-            context = browser.new_context(storage_state=SESSION_FILE)
-            print("تم استعادة الجلسة المحفوظة")
-            # افتح صفحة gathern مبكراً لتفعيل الـ localStorage قبل أي شيء آخر
-            _warm = context.new_page()
-            _warm.goto("https://business.gathern.co/app/calendar", wait_until="domcontentloaded", timeout=30000)
-            time.sleep(2)
-            _warm.close()
+    data = collect_prices()
+    if not data["all_apt"]:
+        send_telegram("فشل جمع الاسعار!")
+        return
+    apt_avg = trimmed_mean(data["avail_apt"], pct=0.10) or trimmed_mean(data["all_apt"], pct=0.10)
+    std_avg = trimmed_mean(data["avail_studio"], pct=0.10) or trimmed_mean(data["all_studio"], pct=0.10) or apt_avg
+    print(f"متوسط الشقق (متاح): {apt_avg} ({len(data['avail_apt'])} وحدة) | الاستديوهات: {std_avg} ({len(data['avail_studio'])} وحدة)")
+
+    gathern_status = {}
+    ok_rows    = []
+    skip_rows  = []
+    err_rows   = []
+    updated_count = 0
+    released_count = 0
+
+    for unit in UNITS:
+        if unit.get("manual_only") and not MANUAL_RUN:
+            continue
+        if not unit.get("unit_id"):
+            continue
+        uid = unit["unit_id"]
+        utype = unit["type"]
+        strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
+        if is_evening:
+            strategy = evening_downgrade(strategy)
+        base = std_avg if "استديو" in utype else apt_avg
+        price = calc_price(base, strategy)
+        status = gathern_update_price_api(gathern_jwt, unit, price, today)
+        gathern_status[uid] = status
+        if status == "ok":
+            updated_count += 1
+            ok_rows.append((unit, price))
+        elif status in ("booked_guest", "blocked_manual"):
+            skip_rows.append(f"⏭️ {unit['name']} ← محجوزة")
+        elif status == "expired":
+            err_rows.append(f"❌ {unit['name']} ← JWT منتهي")
         else:
-            context = browser.new_context()
-        data = collect_prices()
-        if not data["all_apt"]:
-            send_telegram("فشل جمع الاسعار!")
-            browser.close()
-            return
-        # متوسط مشذّب 10% من المتاحة فقط (المحجوزة وفوق 450 مستبعدة)
-        apt_avg = trimmed_mean(data["avail_apt"], pct=0.10) or trimmed_mean(data["all_apt"], pct=0.10)
-        std_avg = trimmed_mean(data["avail_studio"], pct=0.10) or trimmed_mean(data["all_studio"], pct=0.10) or apt_avg
-        print(f"متوسط الشقق (متاح): {apt_avg} ({len(data['avail_apt'])} وحدة) | الاستديوهات: {std_avg} ({len(data['avail_studio'])} وحدة)")
-        business_page = context.new_page()
-        logged_in = login(business_page)
-        if not logged_in:
-            send_telegram("فشل تسجيل الدخول!")
-            browser.close()
-            return
-        # احفظ الجلسة بعد تسجيل الدخول الناجح
-        try:
-            context.storage_state(path=SESSION_FILE)
-            print("تم حفظ الجلسة")
-        except:
-            pass
+            err_rows.append(f"❌ {unit['name']} ← {status}")
 
-        # gathern_status: unit_id -> status للاستخدام لاحقاً في نزل
-        gathern_status = {}
-        ok_rows    = []  # ✅ متاحة ومحدّثة
-        skip_rows  = []  # ⏭️ محجوزة أو مغلقة
-        err_rows   = []  # ❌ أخطاء
-        updated_count = 0
-        released_count = 0
+    save_history(today, now_str, data, apt_avg, std_avg, updated_count, len(UNITS))
 
-        for unit in UNITS:
-            if unit.get("manual_only") and not MANUAL_RUN:
-                continue
-            if not unit.get("unit_id"):
-                continue
-            uid = unit["unit_id"]
-            utype = unit["type"]
-            strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
-            if is_evening:
-                strategy = evening_downgrade(strategy)
-            base = std_avg if "استديو" in utype else apt_avg
-            price = calc_price(base, strategy)
-            status = update_price(business_page, unit, price, today)
-            gathern_status[uid] = status
-            if status == "ok":
-                updated_count += 1
-                ok_rows.append((unit, price))
-            elif status == "booked_guest":
-                skip_rows.append(f"⏭️ {unit['name']} ← محجوزة")
-            elif status == "blocked_manual":
-                if is_midnight_release:
-                    rel = release_unit(business_page, unit, today)
-                    if rel == "released":
-                        released_count += 1
-                        ok_rows.append((unit, price))
-                        gathern_status[uid] = "released"
-                    else:
-                        err_rows.append(f"❌ {unit['name']} ← فشل الإتاحة ({rel})")
-                else:
-                    skip_rows.append(f"🔒 {unit['name']} ← مشغولة يدوياً")
+    # ── Airbnb (Playwright) — فقط لو فيه وحدات بـ airbnb_id ────────────────
+    airbnb_units = [u for u in UNITS if u.get("airbnb_id") and not u.get("manual_only")]
+    if airbnb_units and not is_midnight_release:
+        SESSION_FILE = os.path.join(BASE_DIR, "session_state.json")
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            if os.path.exists(SESSION_FILE):
+                context = browser.new_context(storage_state=SESSION_FILE)
             else:
-                err_map = {"err_load":"ما حمّلت","err_option":"ما لقيت","err_calendar":"تقويم","err_day":"يوم؟","err_drawer":"drawer","err_ex":"خطأ"}
-                err_rows.append(f"❌ {unit['name']} ← {err_map.get(status, status)}")
-
-        save_history(today, now_str, data, apt_avg, std_avg, updated_count, len(UNITS))
-        browser.close()
+                context = browser.new_context()
+            airbnb_page = context.new_page()
+            if airbnb_login(airbnb_page):
+                for unit in airbnb_units:
+                    uid = unit.get("unit_id", "") or unit["name"]
+                    utype = unit["type"]
+                    strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
+                    if is_evening:
+                        strategy = evening_downgrade(strategy)
+                    base = std_avg if "استديو" in utype else apt_avg
+                    price = calc_price(base, strategy)
+                    airbnb_update_price(airbnb_page, unit, price, today)
+            try:
+                context.storage_state(path=SESSION_FILE)
+            except:
+                pass
+            browser.close()
 
         # ── نزل (Airbnb + Booking.com) ──────────────────────
         nuzul_ok = {}   # unit_id/name -> price
