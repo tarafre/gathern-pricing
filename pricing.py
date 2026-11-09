@@ -176,31 +176,10 @@ def collect_prices(_page=None):
 
 # ── Gathern API (بدون متصفح) ────────────────────────────────────────────────
 
-def gathern_refresh_token():
-    """يجدّد الـ access token باستخدام refresh token."""
-    refresh = os.environ.get("GB_JWT_REFRESH", "")
-    if not refresh:
-        return os.environ.get("GB_JWT", "")
-    try:
-        r = requests.post(
-            "https://cauth.gathern.co/oauth/token",
-            json={
-                "grant_type": "refresh_token",
-                "refresh_token": refresh,
-                "client_id": "d420139f2c238e94216f",
-            },
-            headers={"Content-Type": "application/json", "Origin": "https://business.gathern.co"},
-            timeout=20
-        )
-        if r.status_code == 200:
-            data = r.json()
-            new_jwt = data.get("access_token") or data.get("token", "")
-            if new_jwt:
-                print("تجديد JWT نجح")
-                return new_jwt
-    except Exception as e:
-        print(f"تجديد JWT فشل: {e}")
-    return os.environ.get("GB_JWT", "")
+def gathern_get_token():
+    """يرجع GB_TOKEN (opaque token طويل الأمد) أو GB_JWT كبديل."""
+    token = os.environ.get("GB_TOKEN", "") or os.environ.get("GB_JWT", "")
+    return token
 
 def gathern_check_booking(jwt, unit_id, today):
     """يتحقق من حالة الوحدة عبر API — يرجع 'free' أو 'booked_guest' أو 'blocked'."""
@@ -841,9 +820,9 @@ def main():
     is_evening = hour >= evening_hour
 
     # ── Gathern: تجديد الـ JWT وتحديث الأسعار عبر API ──────────────────────
-    gathern_jwt = gathern_refresh_token()
+    gathern_jwt = gathern_get_token()
     if not gathern_jwt:
-        send_telegram("⚠️ GB_JWT غير موجود — أضفه كـ GitHub Secret")
+        send_telegram("⚠️ GB_TOKEN غير موجود — أضفه كـ GitHub Secret")
         return
 
     data = collect_prices()

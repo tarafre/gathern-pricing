@@ -22,8 +22,8 @@ jobs:
       NUZUL_PHONE:        ${{ secrets.NUZUL_PHONE }}
       NUZUL_PASSWORD:     ${{ secrets.NUZUL_PASSWORD }}
       MANUAL_RUN:         ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+      GB_TOKEN:           ${{ secrets.GB_TOKEN }}
       GB_JWT:             ${{ secrets.GB_JWT }}
-      GB_JWT_REFRESH:     ${{ secrets.GB_JWT_REFRESH }}
       DISPLAY: ':99'
 
     steps:
