@@ -914,84 +914,83 @@ def main():
                 pass
             browser.close()
 
-        # ── نزل (Airbnb + Booking.com) ──────────────────────
-        nuzul_ok = {}   # unit_id/name -> price
-        nuzul_err = []
+    # ── نزل (Airbnb + Booking.com) ──────────────────────
+    nuzul_ok = {}
+    nuzul_err = []
 
-        if NUZUL_PHONE and NUZUL_PASSWORD:
-            try:
-                nuzul_token = nuzul_login()
-                if nuzul_token:
-                    for unit in UNITS:
-                        if unit.get("manual_only") and not MANUAL_RUN:
-                            continue
-                        uid   = unit.get("unit_id", "") or unit["name"]
-                        utype = unit["type"]
-                        override_val = overrides.get(uid) or overrides.get(unit["name"])
-                        if unit.get("manual_only") and not override_val:
-                            continue
-                        # تخطي المحجوزة في قاذران
-                        g_status = gathern_status.get(unit.get("unit_id",""))
-                        if g_status in ("booked_guest", "blocked_manual"):
-                            continue
-                        strategy = override_val or DEFAULT_STRATEGY.get(utype, "0")
-                        if is_evening and not unit.get("manual_only"):
-                            strategy = evening_downgrade(strategy)
-                        base  = std_avg if "استديو" in utype else apt_avg
-                        price = calc_price(base, strategy)
-                        status = nuzul_update_price(nuzul_token, unit, price, today)
-                        if status == "ok":
-                            nuzul_ok[uid] = price
-                        elif status == "err":
-                            nuzul_err.append(unit["name"])
-            except Exception as e:
-                print(f"نزل خطأ: {e}")
+    if NUZUL_PHONE and NUZUL_PASSWORD:
+        try:
+            nuzul_token = nuzul_login()
+            if nuzul_token:
+                for unit in UNITS:
+                    if unit.get("manual_only") and not MANUAL_RUN:
+                        continue
+                    uid   = unit.get("unit_id", "") or unit["name"]
+                    utype = unit["type"]
+                    override_val = overrides.get(uid) or overrides.get(unit["name"])
+                    if unit.get("manual_only") and not override_val:
+                        continue
+                    g_status = gathern_status.get(unit.get("unit_id",""))
+                    if g_status in ("booked_guest", "blocked_manual"):
+                        continue
+                    strategy = override_val or DEFAULT_STRATEGY.get(utype, "0")
+                    if is_evening and not unit.get("manual_only"):
+                        strategy = evening_downgrade(strategy)
+                    base  = std_avg if "استديو" in utype else apt_avg
+                    price = calc_price(base, strategy)
+                    status = nuzul_update_price(nuzul_token, unit, price, today)
+                    if status == "ok":
+                        nuzul_ok[uid] = price
+                    elif status == "err":
+                        nuzul_err.append(unit["name"])
+        except Exception as e:
+            print(f"نزل خطأ: {e}")
 
-        # ── بناء الرسالة الموحّدة ──────────────────────────
-        time_label = "منتصف الليل - إتاحة" if is_midnight_release else ("مساء" if is_evening else now_str)
-        sep = "━━━━━━━━━━━━━━━"
+    # ── بناء الرسالة الموحّدة ──────────────────────────
+    time_label = "منتصف الليل - إتاحة" if is_midnight_release else ("مساء" if is_evening else now_str)
+    sep = "━━━━━━━━━━━━━━━"
 
-        ok_lines = []
-        for unit, price in ok_rows:
-            uid = unit.get("unit_id","") or unit["name"]
-            nuzul_badge = " 🟡" if uid in nuzul_ok else ""
-            suffix = " 🔓" if gathern_status.get(unit.get("unit_id","")) == "released" else ""
-            ok_lines.append(f"✅ {unit['name']} ← {price} ر.س{nuzul_badge}{suffix}")
+    ok_lines = []
+    for unit, price in ok_rows:
+        uid = unit.get("unit_id","") or unit["name"]
+        nuzul_badge = " 🟡" if uid in nuzul_ok else ""
+        suffix = " 🔓" if gathern_status.get(unit.get("unit_id","")) == "released" else ""
+        ok_lines.append(f"✅ {unit['name']} ← {price} ر.س{nuzul_badge}{suffix}")
 
-        nz_updated = len(nuzul_ok)
-        nz_err_count = len(nuzul_err)
+    nz_updated = len(nuzul_ok)
+    nz_err_count = len(nuzul_err)
 
-        msg = (
-            f"📊 تحديث الأسعار — {time_label}\n{sep}\n"
-            f"متوسط الشقق: {apt_avg} ر.س | الاستديوهات: {std_avg} ر.س\n"
-            f"إشغال السوق: {data['occ_all']}% (شقق {data['occ_apt']}% · استديوهات {data['occ_studio']}%)\n"
-            f"{sep}\n"
-            f"🟣 قاذران — متاحة ومحدّثة ({len(ok_lines)})\n"
-            + "\n".join(ok_lines)
-        )
+    msg = (
+        f"📊 تحديث الأسعار — {time_label}\n{sep}\n"
+        f"متوسط الشقق: {apt_avg} ر.س | الاستديوهات: {std_avg} ر.س\n"
+        f"إشغال السوق: {data['occ_all']}% (شقق {data['occ_apt']}% · استديوهات {data['occ_studio']}%)\n"
+        f"{sep}\n"
+        f"🟣 قاذران — متاحة ومحدّثة ({len(ok_lines)})\n"
+        + "\n".join(ok_lines)
+    )
 
-        if skip_rows:
-            msg += f"\n─ ─ ─ ─ ─ ─ ─\n⏭️ محجوزة أو مغلقة ({len(skip_rows)})\n" + "\n".join(skip_rows)
+    if skip_rows:
+        msg += f"\n─ ─ ─ ─ ─ ─ ─\n⏭️ محجوزة أو مغلقة ({len(skip_rows)})\n" + "\n".join(skip_rows)
 
-        if err_rows:
-            msg += f"\n─ ─ ─ ─ ─ ─ ─\n⚠️ أخطاء ({len(err_rows)})\n" + "\n".join(err_rows)
+    if err_rows:
+        msg += f"\n─ ─ ─ ─ ─ ─ ─\n⚠️ أخطاء ({len(err_rows)})\n" + "\n".join(err_rows)
 
-        if nuzul_err:
-            msg += f"\n─ ─ ─ ─ ─ ─ ─\n🟡 نزل أخطاء: " + " · ".join(nuzul_err)
+    if nuzul_err:
+        msg += f"\n─ ─ ─ ─ ─ ─ ─\n🟡 نزل أخطاء: " + " · ".join(nuzul_err)
 
-        summary = f"🟣{updated_count}✅"
-        if released_count:
-            summary += f" 🔓{released_count}"
-        summary += f" · 🟡{nz_updated}✅"
-        if skip_rows:
-            summary += f" · ⏭️{len(skip_rows)}"
-        if err_rows or nz_err_count:
-            summary += f" · ❌{len(err_rows)+nz_err_count}"
+    summary = f"🟣{updated_count}✅"
+    if released_count:
+        summary += f" 🔓{released_count}"
+    summary += f" · 🟡{nz_updated}✅"
+    if skip_rows:
+        summary += f" · ⏭️{len(skip_rows)}"
+    if err_rows or nz_err_count:
+        summary += f" · ❌{len(err_rows)+nz_err_count}"
 
-        msg += f"\n{sep}\n{summary}"
+    msg += f"\n{sep}\n{summary}"
 
-        send_telegram(msg)
-        print("انتهى التحديث الكامل!")
+    send_telegram(msg)
+    print("انتهى التحديث الكامل!")
 
 if __name__ == "__main__":
     main()
