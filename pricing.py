@@ -84,44 +84,22 @@ def trimmed_mean(prices, pct=0.10):
     trimmed = s[cut:-cut] if len(s) > cut * 2 else s
     return round(sum(trimmed) / len(trimmed))
 
-def collect_prices(_page=None):
-    """تجمع أسعار السوق مباشرة من API قاذرإن بدون متصفح."""
-    from datetime import timezone, timedelta
-    print("جمع اسعار المنافسين...")
-    ksa_now  = datetime.now(timezone.utc) + timedelta(hours=3)
-    today    = ksa_now.strftime("%Y-%m-%d")
-    tomorrow = (ksa_now + timedelta(days=1)).strftime("%Y-%m-%d")
-
+def _fetch_city_prices(city_id, today, tomorrow, headers):
+    """يجمع أسعار مدينة واحدة ويرجع dict بنفس صيغة collect_prices."""
     apt_all, studio_all, apt_avail, studio_avail = [], [], [], []
-    headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-        "Accept": "application/json",
-        "Referer": "https://gathern.co/",
-    }
-
     for page_num in range(1, 33):
-        params = {
-            "chalet_cats[]": ["6", "7", "8", "9"],
-            "city": CITY_ID,
-            "checkin": today,
-            "checkout": tomorrow,
-            "page": page_num,
-            "orderby": "points",
-            "lang": "ar",
-        }
+        url = (f"https://msapi.gathern.co/search/api/v1/search-units"
+               f"?chalet_cats[]=6&chalet_cats[]=7&chalet_cats[]=8&chalet_cats[]=9"
+               f"&city={city_id}&checkin={today}&checkout={tomorrow}"
+               f"&page={page_num}&orderby=points&lang=ar")
         try:
-            r = requests.get(
-                "https://msapi.gathern.co/search/api/v1/search-units",
-                params=params, headers=headers, timeout=15
-            )
+            r = requests.get(url, headers=headers, timeout=15)
             units = r.json().get("items", [])
         except Exception as e:
-            print(f"  خطأ صفحة {page_num}: {e}")
+            print(f"  خطأ city={city_id} صفحة {page_num}: {e}")
             break
-
         if not units:
             break
-
         for u in units:
             try:
                 title = (u.get("unit_custom_title") or u.get("chalet_title") or "").strip()
@@ -131,22 +109,13 @@ def collect_prices(_page=None):
                     utype = "apt"
                 else:
                     continue
-
                 reviews = int(u.get("total_reviews") or u.get("total_present") or 0)
                 if reviews < 3:
                     continue
-
                 price = float(u.get("cancel_price") or u.get("final_price") or 0)
-                if price < 80:
+                if price < 80 or price > PRICE_CAP:
                     continue
-
-                # فوق 450 = صاحب الوحدة رفع السعر ليمنع الحجز → تُعدّ محجوزة
                 is_avail = bool(u.get("isUnitAvailable", True)) and price <= PRICE_CAP
-
-                # نضيف فقط الوحدات ضمن نطاق سعري معقول للإحصاء
-                if price > PRICE_CAP:
-                    continue
-
                 if utype == "studio":
                     studio_all.append(price)
                     if is_avail: studio_avail.append(price)
@@ -155,9 +124,7 @@ def collect_prices(_page=None):
                     if is_avail: apt_avail.append(price)
             except:
                 pass
-
-        print(f"  صفحة {page_num}: {len(units)} وحدة")
-
+        print(f"  city={city_id} صفحة {page_num}: {len(units)} وحدة")
     apt_booked    = len(apt_all)    - len(apt_avail)
     studio_booked = len(studio_all) - len(studio_avail)
     total_all     = len(apt_all) + len(studio_all)
@@ -165,7 +132,7 @@ def collect_prices(_page=None):
     occ_apt    = round(apt_booked    / len(apt_all)    * 100) if apt_all    else 0
     occ_studio = round(studio_booked / len(studio_all) * 100) if studio_all else 0
     occ_all    = round(total_booked  / total_all       * 100) if total_all  else 0
-    print(f"  شقق: {len(apt_all)} محجوز {apt_booked} ({occ_apt}%) | استديوهات: {len(studio_all)} محجوز {studio_booked} ({occ_studio}%) | الإجمالي: {occ_all}%")
+    print(f"  city={city_id}: شقق {len(apt_all)} ({occ_apt}%) | استديوهات {len(studio_all)} ({occ_studio}%)")
     return {
         "all_apt": apt_all, "all_studio": studio_all,
         "avail_apt": apt_avail, "avail_studio": studio_avail,
@@ -173,6 +140,48 @@ def collect_prices(_page=None):
         "apt_booked": apt_booked, "studio_booked": studio_booked,
         "total_booked": total_booked, "total_all": total_all,
     }
+
+
+def collect_prices(_page=None):
+    """تجمع أسعار السوق من كل المدن المُعرَّفة."""
+    from datetime import timezone, timedelta
+    print("جمع اسعار المنافسين...")
+    ksa_now  = datetime.now(timezone.utc) + timedelta(hours=3)
+    today    = ksa_now.strftime("%Y-%m-%d")
+    tomorrow = (ksa_now + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+        "Accept": "application/json",
+        "Referer": "https://gathern.co/",
+    }
+
+    # جمع أسعار الخرج والمجمعة
+    data_kharj = _fetch_city_prices(CITY_ID, today, tomorrow, headers)
+    data_majma = _fetch_city_prices(CITY_ID_MAJMA, today, tomorrow, headers)
+
+    # دمج المدينتين للإحصاء الكلي
+    def merge(d1, d2):
+        merged = {}
+        for k in d1:
+            if isinstance(d1[k], list):
+                merged[k] = d1[k] + d2[k]
+            else:
+                t1 = d1["total_all"]; t2 = d2["total_all"]
+                merged[k] = round((d1[k]*t1 + d2[k]*t2)/(t1+t2)) if (t1+t2) else 0
+        return merged
+
+    combined = merge(data_kharj, data_majma)
+
+    # أضف بيانات كل مدينة منفردة للاستخدام في main()
+    combined["kharj"] = data_kharj
+    combined["majma"] = data_majma
+
+    # للتوافق مع save_history
+    for k in ["occ_apt","occ_studio","occ_all","apt_booked","studio_booked","total_booked","total_all"]:
+        combined[k] = data_kharj[k]  # الإحصاء الرئيسي من الخرج
+
+    return combined
 
 # ── Gathern API (بدون متصفح) ────────────────────────────────────────────────
 
@@ -826,12 +835,19 @@ def main():
         return
 
     data = collect_prices()
-    if not data["all_apt"]:
+    if not data["all_apt"] and not data.get("majma", {}).get("all_apt"):
         send_telegram("فشل جمع الاسعار!")
         return
-    apt_avg = trimmed_mean(data["avail_apt"], pct=0.10) or trimmed_mean(data["all_apt"], pct=0.10)
-    std_avg = trimmed_mean(data["avail_studio"], pct=0.10) or trimmed_mean(data["all_studio"], pct=0.10) or apt_avg
-    print(f"متوسط الشقق (متاح): {apt_avg} ({len(data['avail_apt'])} وحدة) | الاستديوهات: {std_avg} ({len(data['avail_studio'])} وحدة)")
+
+    def city_avgs(city_data):
+        a = trimmed_mean(city_data["avail_apt"], pct=0.10) or trimmed_mean(city_data["all_apt"], pct=0.10)
+        s = trimmed_mean(city_data["avail_studio"], pct=0.10) or trimmed_mean(city_data["all_studio"], pct=0.10) or a
+        return a, s
+
+    apt_avg, std_avg = city_avgs(data["kharj"])
+    apt_avg_mj, std_avg_mj = city_avgs(data["majma"])
+    print(f"الخرج — شقق: {apt_avg} | استديوهات: {std_avg}")
+    print(f"المجمعة — شقق: {apt_avg_mj} | استديوهات: {std_avg_mj}")
 
     gathern_status = {}
     ok_rows    = []
@@ -850,7 +866,11 @@ def main():
         strategy = overrides.get(uid) or DEFAULT_STRATEGY.get(utype, "0")
         if is_evening:
             strategy = evening_downgrade(strategy)
-        base = std_avg if "استديو" in utype else apt_avg
+        # اختر المتوسط حسب مدينة الوحدة
+        is_majma = unit.get("city_id") == CITY_ID_MAJMA
+        base_apt = apt_avg_mj if is_majma else apt_avg
+        base_std = std_avg_mj if is_majma else std_avg
+        base = base_std if "استديو" in utype else base_apt
         price = calc_price(base, strategy)
         status = gathern_update_price_api(gathern_jwt, unit, price, today)
         gathern_status[uid] = status
@@ -864,7 +884,7 @@ def main():
         else:
             err_rows.append(f"❌ {unit['name']} ← {status}")
 
-    save_history(today, now_str, data, apt_avg, std_avg, updated_count, len(UNITS))
+    save_history(today, now_str, data["kharj"], apt_avg, std_avg, updated_count, len(UNITS))
 
     # ── Airbnb (Playwright) — فقط لو فيه وحدات بـ airbnb_id ────────────────
     airbnb_units = [u for u in UNITS if u.get("airbnb_id") and not u.get("manual_only")]
