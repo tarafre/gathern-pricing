@@ -62,15 +62,15 @@ UNITS = [
     {"name": "ترف 30", "unit_id": "243973", "chalet_id": "173065", "type": "استديو_مميز", "neighborhood": "الهدا", "nuzul_id": 49782, "nuzul_rate_plan": "0012caa0-a79c-47de-9fe2-c95257052de5"},
     {"name": "ترف 31", "unit_id": "243974", "chalet_id": "173065", "type": "استديو_مميز", "neighborhood": "الهدا", "nuzul_id": 49783, "nuzul_rate_plan": "bf6052aa-e92e-4fa9-9198-6622f21755cb"},
 
-    # مساكن ترف المجمعة - المطار (عقار 195866)
-    {"name": "ترف 1-MJ", "unit_id": "273895", "chalet_id": "195866", "type": "شقة_مميزة", "neighborhood": "MJ-المطار",   "city_id": "24", "nuzul_id": 46510, "nuzul_rate_plan": "bafaad9c-057f-47c2-8959-35e2b14ce84d"},
-    {"name": "ترف 2-MJ", "unit_id": "273901", "chalet_id": "195866", "type": "شقة_مميزة", "neighborhood": "MJ-المطار",   "city_id": "24", "nuzul_id": 46511, "nuzul_rate_plan": "e475dd00-43d5-4ce5-8c35-717d50d55864"},
-    {"name": "ترف 3-MJ", "unit_id": "273907", "chalet_id": "195866", "type": "شقة_مميزة", "neighborhood": "MJ-المطار",   "city_id": "24", "nuzul_id": 46512, "nuzul_rate_plan": "827b35ed-e3e1-489f-9e77-9733ed3402ba"},
+    # مساكن ترف المجمعة - المطار (عقار 195866) — سعر ثابت، لا تحديث تلقائي
+    {"name": "ترف 1-MJ", "unit_id": "273895", "chalet_id": "195866", "type": "شقة_مميزة", "neighborhood": "MJ-المطار",   "city_id": "24", "manual_only": True, "nuzul_id": 46510, "nuzul_rate_plan": "bafaad9c-057f-47c2-8959-35e2b14ce84d"},
+    {"name": "ترف 2-MJ", "unit_id": "273901", "chalet_id": "195866", "type": "شقة_مميزة", "neighborhood": "MJ-المطار",   "city_id": "24", "manual_only": True, "nuzul_id": 46511, "nuzul_rate_plan": "e475dd00-43d5-4ce5-8c35-717d50d55864"},
+    {"name": "ترف 3-MJ", "unit_id": "273907", "chalet_id": "195866", "type": "شقة_مميزة", "neighborhood": "MJ-المطار",   "city_id": "24", "manual_only": True, "nuzul_id": 46512, "nuzul_rate_plan": "827b35ed-e3e1-489f-9e77-9733ed3402ba"},
 
-    # مساكن ترف المجمعة - الملك فهد (عقار 193916)
-    {"name": "ترف 4-MJ", "unit_id": "271187", "chalet_id": "193916", "type": "شقة_مميزة", "neighborhood": "MJ-الملك فهد", "city_id": "24", "nuzul_id": 53336, "nuzul_rate_plan": "bc4c6046-daa8-4627-80e7-e9ea89704aeb"},
-    {"name": "ترف 5-MJ", "unit_id": "271403", "chalet_id": "193916", "type": "شقة_مميزة", "neighborhood": "MJ-الملك فهد", "city_id": "24", "nuzul_id": 53337, "nuzul_rate_plan": "e381b636-e09f-4861-8bff-8fa800b9776d"},
-    {"name": "ترف 6-MJ", "unit_id": "271410", "chalet_id": "193916", "type": "شقة_مميزة", "neighborhood": "MJ-الملك فهد", "city_id": "24", "nuzul_id": 53338, "nuzul_rate_plan": "99a74cc7-9501-4458-a693-36509f7f90d2"},
+    # مساكن ترف المجمعة - الملك فهد (عقار 193916) — سعر ثابت، لا تحديث تلقائي
+    {"name": "ترف 4-MJ", "unit_id": "271187", "chalet_id": "193916", "type": "شقة_مميزة", "neighborhood": "MJ-الملك فهد", "city_id": "24", "manual_only": True, "nuzul_id": 53336, "nuzul_rate_plan": "bc4c6046-daa8-4627-80e7-e9ea89704aeb"},
+    {"name": "ترف 5-MJ", "unit_id": "271403", "chalet_id": "193916", "type": "شقة_مميزة", "neighborhood": "MJ-الملك فهد", "city_id": "24", "manual_only": True, "nuzul_id": 53337, "nuzul_rate_plan": "e381b636-e09f-4861-8bff-8fa800b9776d"},
+    {"name": "ترف 6-MJ", "unit_id": "271410", "chalet_id": "193916", "type": "شقة_مميزة", "neighborhood": "MJ-الملك فهد", "city_id": "24", "manual_only": True, "nuzul_id": 53338, "nuzul_rate_plan": "99a74cc7-9501-4458-a693-36509f7f90d2"},
 ]
 
 # الاستراتيجية الافتراضية لكل نوع (نسبة مئوية)
