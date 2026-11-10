@@ -861,9 +861,13 @@ def main():
     updated_count = 0
     released_count = 0
 
+    mj_auto = set(cfg.get("mj_auto", []))  # وحدات MJ فعّل لها التحديث التلقائي
+
     for unit in UNITS:
         if unit.get("manual_only") and not MANUAL_RUN:
-            continue
+            # استثناء: لو المستخدم فعّل التحديث التلقائي لهذه الوحدة من الداش بورد
+            if unit.get("unit_id") not in mj_auto:
+                continue
         if not unit.get("unit_id"):
             continue
         uid = unit["unit_id"]

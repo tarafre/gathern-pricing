@@ -448,8 +448,19 @@ function stratClass(s){
 }
 const PCT = new Proxy({}, {get:(_,s) => { s=LEGACY_MAP[s]||s; return 1+(parseInt(s)||0)/100; }});
 
-let cfg = {start_hour:11, end_hour:23, evening_hour:19, unit_overrides:{}};
+let cfg = {start_hour:11, end_hour:23, evening_hour:19, unit_overrides:{}, mj_auto:[]};
 let activeCity = 'kharj';
+
+function toggleMjAuto(uid, btn){
+  if(!cfg.mj_auto) cfg.mj_auto = [];
+  const idx = cfg.mj_auto.indexOf(uid);
+  if(idx === -1){
+    cfg.mj_auto.push(uid);
+  } else {
+    cfg.mj_auto.splice(idx, 1);
+  }
+  renderUnits();
+}
 
 function switchCity(city, el){
   activeCity = city;
@@ -524,9 +535,14 @@ async function saveConfig(){
   cfg.end_hour     = parseInt(document.getElementById('end-h').value ?? '23');
   cfg.evening_hour = parseInt(document.getElementById('eve-h').value ?? '19');
 
-  // جمع overrides من الـ selects
-  document.querySelectorAll('.sel').forEach(s=>{
+  // جمع overrides من الـ selects (شامل وحدات MJ التلقائية)
+  document.querySelectorAll('.sel[data-id]').forEach(s=>{
     cfg.unit_overrides[s.dataset.id] = s.value;
+  });
+  // جمع الأسعار اليدوية لوحدات MJ
+  document.querySelectorAll('.manual-price-input[data-id]').forEach(inp=>{
+    const v = inp.value.trim();
+    if(v && !isNaN(v)) cfg.unit_overrides[inp.dataset.id] = parseInt(v);
   });
 
   try {
@@ -604,22 +620,33 @@ function renderUnits(){
     const opts = STRAT_OPTS.map(o=>`<option value="${o.v}"${o.v===cur?' selected':''}>${o.l}</option>`).join('');
     const chk = selectedIds.has(uid2) ? 'checked' : '';
     const selCls = selectedIds.has(uid2) ? ' selected' : '';
-    const manualBadge = u.manual ? '<span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(139,92,246,.12);color:#8b5cf6;margin-right:4px">يدوي</span>' : '';
     if(u.manual){
-      const manualPrice = cfg.unit_overrides[uid2] && !isNaN(cfg.unit_overrides[uid2])
+      const isAuto = (cfg.mj_auto || []).includes(uid2);
+      const manualPrice = !isAuto && cfg.unit_overrides[uid2] && !isNaN(cfg.unit_overrides[uid2])
                           ? cfg.unit_overrides[uid2] : '';
+      const autoPrice = isAuto ? calcPrice(u.base, cur) : '';
+      const modeBadge = isAuto
+        ? '<span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(16,185,129,.12);color:#10b981;margin-right:4px">تلقائي</span>'
+        : '<span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(139,92,246,.12);color:#8b5cf6;margin-right:4px">يدوي</span>';
       return `<div class="unit-item${selCls}" id="item-${uid2}">
         <input type="checkbox" class="unit-check" data-id="${uid2}" ${chk} onchange="onCheck(this)">
         <div class="unit-info">
-          <div class="unit-name">${u.name} ${manualBadge}</div>
+          <div class="unit-name">${u.name} ${modeBadge}</div>
           <div class="unit-type">${u.type.replace(/_/g,' ')}</div>
+          <button onclick="toggleMjAuto('${uid2}',this)" style="font-size:10px;padding:2px 8px;border-radius:6px;border:0.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;margin-top:3px">
+            ${isAuto ? '← تعطيل التلقائي' : '← تفعيل التلقائي'}
+          </button>
         </div>
-        <div class="manual-price-wrap">
-          <input type="number" class="manual-price-input" data-id="${uid2}"
-                 placeholder="السعر" value="${manualPrice}"
-                 oninput="onManualPrice(this)" min="1" max="9999">
-          <span class="manual-price-lbl">ر.س</span>
-        </div>
+        ${isAuto
+          ? `<div class="unit-price">${autoPrice} ر.س</div>
+             <select class="sel ${stratClass(cur)}" data-id="${uid2}" onchange="onSel(this)">${opts}</select>`
+          : `<div class="manual-price-wrap">
+               <input type="number" class="manual-price-input" data-id="${uid2}"
+                      placeholder="السعر" value="${manualPrice}"
+                      oninput="onManualPrice(this)" min="1" max="9999">
+               <span class="manual-price-lbl">ر.س</span>
+             </div>`
+        }
       </div>`;
     }
     return `<div class="unit-item${selCls}" id="item-${uid2}">
