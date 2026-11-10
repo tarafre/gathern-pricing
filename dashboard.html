@@ -22,6 +22,9 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite;margin-left:5px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .token-btn{font-size:12px;padding:5px 10px;border:0.5px solid var(--border);border-radius:8px;background:transparent;color:var(--muted);cursor:pointer}
+.seg{display:flex;background:var(--border);border-radius:10px;padding:2px;gap:2px}
+.seg-btn{font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap}
+.seg-btn.active{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 
 /* Tabs */
 .tabs{position:fixed;bottom:0;left:0;right:0;height:var(--tab-h);background:rgba(255,255,255,.95);backdrop-filter:blur(12px);border-top:0.5px solid var(--border);display:flex;z-index:100}
@@ -161,7 +164,13 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
     <div class="header-title">تسعير ترف <span class="live-dot"></span></div>
     <div class="header-sub" id="date-lbl">—</div>
   </div>
-  <button class="token-btn" onclick="showTokenModal()">🔑 التوكن</button>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="seg" id="city-seg">
+      <button class="seg-btn active" onclick="switchCity('kharj',this)">الخرج</button>
+      <button class="seg-btn" onclick="switchCity('majma',this)">المجمعة</button>
+    </div>
+    <button class="token-btn" onclick="showTokenModal()">🔑</button>
+  </div>
 </div>
 
 <!-- Pages -->
@@ -390,22 +399,22 @@ const UNITS = [
   {name:'ترف 21', id:'242199', type:'شقة_مميزة',    base:'apt', cat:'apt1'},
   {name:'ترف 22', id:'242211', type:'شقة_غرفتين',   base:'apt', cat:'apt2'},
   {name:'ترف 23', id:'243598', type:'شقة_غرفتين',   base:'apt', cat:'apt2'},
-  {name:'ترف 20', id:'244984', type:'استديو_مميز',  base:'std', cat:'std'},
+  {name:'ترف 20', id:'244984', type:'شقة_مميزة',    base:'apt', cat:'apt1x', label:'جاكوزي ✦'},
   {name:'ترف 24', id:'254114', type:'استديو_مميز',  base:'std', cat:'std'},
   {name:'ترف 25', id:'256045', type:'استديو_مميز',  base:'std', cat:'std'},
   {name:'ترف 26', id:'241890', type:'استديو_مميز',  base:'std', cat:'std'},
   {name:'ترف 27', id:'242428', type:'استديو_مميز',  base:'std', cat:'std'},
   {name:'ترف 28', id:'242505', type:'استديو_مميز',  base:'std', cat:'std'},
-  {name:'ترف 29', id:'241805', type:'استديو_مميز',  base:'std', cat:'std'},
+  {name:'ترف 29', id:'241805', type:'شقة_مميزة',    base:'apt', cat:'apt1x', label:'جاكوزي ✦'},
   {name:'ترف 30', id:'243973', type:'استديو_مميز',  base:'std', cat:'std'},
   {name:'ترف 31', id:'243974', type:'استديو_مميز',  base:'std', cat:'std'},
   // وحدات ترف المجمعة — سعر ثابت يدوي، لا تحديث تلقائي
-  {name:'ترف 1-MJ', id:'273895', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
-  {name:'ترف 2-MJ', id:'273901', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
-  {name:'ترف 3-MJ', id:'273907', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
-  {name:'ترف 4-MJ', id:'271187', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
-  {name:'ترف 5-MJ', id:'271403', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
-  {name:'ترف 6-MJ', id:'271410', type:'شقة_مميزة', base:'apt', cat:'mj', manual:true},
+  {name:'ترف 1-MJ', id:'273895', type:'شقة_مميزة', base:'apt', cat:'mj', city:'majma', manual:true},
+  {name:'ترف 2-MJ', id:'273901', type:'شقة_مميزة', base:'apt', cat:'mj', city:'majma', manual:true},
+  {name:'ترف 3-MJ', id:'273907', type:'شقة_مميزة', base:'apt', cat:'mj', city:'majma', manual:true},
+  {name:'ترف 4-MJ', id:'271187', type:'شقة_مميزة', base:'apt', cat:'mj', city:'majma', manual:true},
+  {name:'ترف 5-MJ', id:'271403', type:'شقة_مميزة', base:'apt', cat:'mj', city:'majma', manual:true},
+  {name:'ترف 6-MJ', id:'271410', type:'شقة_مميزة', base:'apt', cat:'mj', city:'majma', manual:true},
 ];
 
 const DEFAULT_STRAT = {
@@ -440,6 +449,14 @@ function stratClass(s){
 const PCT = new Proxy({}, {get:(_,s) => { s=LEGACY_MAP[s]||s; return 1+(parseInt(s)||0)/100; }});
 
 let cfg = {start_hour:11, end_hour:23, evening_hour:19, unit_overrides:{}};
+let activeCity = 'kharj';
+
+function switchCity(city, el){
+  activeCity = city;
+  document.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderUnits();
+}
 let aptAvg = APT_AVG_DEFAULT, stdAvg = STD_AVG_DEFAULT;
 let configSha = null;
 
@@ -577,7 +594,8 @@ function setFilter(cat){
 }
 
 function renderUnits(){
-  const visible = activeFilter === 'all' ? UNITS : UNITS.filter(u => u.cat === activeFilter);
+  const cityFiltered = UNITS.filter(u => activeCity === 'majma' ? u.city === 'majma' : !u.city);
+  const visible = activeFilter === 'all' ? cityFiltered : cityFiltered.filter(u => u.cat === activeFilter);
   document.getElementById('units-list').innerHTML = visible.map(u => {
     const uid2 = u.id || u.name;
     const raw = cfg.unit_overrides[uid2] || DEFAULT_STRAT[u.type] || '0';
