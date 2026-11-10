@@ -556,6 +556,34 @@ def nuzul_login():
         print(f"نزل: فشل تسجيل الدخول: {e}")
         return ""
 
+def nuzul_update_direct_price(token, unit, price):
+    """يحدّث سعر الأيام الأسبوعية على موقع ترف المباشر عبر نزل."""
+    nuzul_id = unit.get("nuzul_id", 0)
+    if not nuzul_id:
+        return "no_nuzul"
+    day_keys = ["sunday_price","monday_price","tuesday_price","wednesday_price",
+                "thursday_price","friday_price","saturday_price"]
+    body = {k: price for k in day_keys}
+    try:
+        r = requests.put(
+            f"https://{NUZUL_BACKEND}/api/properties/{nuzul_id}/pricing",
+            json=body,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            timeout=20
+        )
+        if r.status_code == 200:
+            return "ok"
+        print(f"  نزل-direct {unit['name']}: status {r.status_code} {r.text[:100]}")
+        return "err"
+    except Exception as e:
+        print(f"  نزل-direct خطأ {unit['name']}: {e}")
+        return "err"
+
+
 def nuzul_update_price(token, unit, price, today):
     """يحدّث سعر اليوم على Airbnb+Booking عبر نزل/Channex."""
     nuzul_id   = unit.get("nuzul_id", 0)
@@ -948,9 +976,10 @@ def main():
                     base  = std_avg if "استديو" in utype else apt_avg
                     price = calc_price(base, strategy)
                     status = nuzul_update_price(nuzul_token, unit, price, today)
-                    if status == "ok":
+                    direct_status = nuzul_update_direct_price(nuzul_token, unit, price)
+                    if status == "ok" or direct_status == "ok":
                         nuzul_ok[uid] = price
-                    elif status == "err":
+                    if status == "err":
                         nuzul_err.append(unit["name"])
         except Exception as e:
             print(f"نزل خطأ: {e}")
@@ -969,10 +998,14 @@ def main():
     nz_updated = len(nuzul_ok)
     nz_err_count = len(nuzul_err)
 
+    mj_line = ""
+    if apt_avg_mj:
+        mj_line = f"المجمعة — شقق: {apt_avg_mj} ر.س | إشغال: {data['majma'].get('occ_all',0)}%\n"
     msg = (
         f"📊 تحديث الأسعار — {time_label}\n{sep}\n"
-        f"متوسط الشقق: {apt_avg} ر.س | الاستديوهات: {std_avg} ر.س\n"
+        f"الخرج — شقق: {apt_avg} ر.س | استديوهات: {std_avg} ر.س\n"
         f"إشغال السوق: {data['occ_all']}% (شقق {data['occ_apt']}% · استديوهات {data['occ_studio']}%)\n"
+        f"{mj_line}"
         f"{sep}\n"
         f"🟣 قاذران — متاحة ومحدّثة ({len(ok_lines)})\n"
         + "\n".join(ok_lines)
