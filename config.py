@@ -47,9 +47,9 @@ UNITS = [
     {"name": "ترف 17-B", "unit_id": "280024", "chalet_id": "153394", "type": "شقة_مميزة", "neighborhood": "الورود", "nuzul_id": 0,     "nuzul_rate_plan": ""},
 
     # مساكن ترف - الهدا
-    {"name": "ترف 18", "unit_id": "243848", "chalet_id": "173065", "type": "شقة_مميزة",   "neighborhood": "الهدا", "nuzul_id": 49770, "nuzul_rate_plan": ""},
+    {"name": "ترف 18", "unit_id": "243848", "chalet_id": "173065", "type": "شقة_مميزة",   "neighborhood": "الهدا", "nuzul_id": 49770, "nuzul_rate_plan": "602ae44b-d9b3-42b2-86ad-11d8e583f081"},
     {"name": "ترف 19", "unit_id": "241775", "chalet_id": "173065", "type": "استديو_مميز", "neighborhood": "الهدا", "nuzul_id": 49771, "nuzul_rate_plan": "b661e845-8bba-4898-a635-92e9bc1edda0"},
-    {"name": "ترف 20", "unit_id": "244984", "chalet_id": "173065", "type": "شقة_مميزة",   "neighborhood": "الهدا", "nuzul_id": 0,     "nuzul_rate_plan": ""},
+    {"name": "ترف 20", "unit_id": "244984", "chalet_id": "173065", "type": "شقة_مميزة",   "neighborhood": "الهدا", "nuzul_id": 49772, "nuzul_rate_plan": "2b7dae6a-368e-4731-b36b-02416aa9334b"},
     {"name": "ترف 21", "unit_id": "242199", "chalet_id": "173065", "type": "شقة_مميزة",   "neighborhood": "الهدا", "nuzul_id": 49774, "nuzul_rate_plan": "643db913-9c66-4a25-ba5c-937da1058984"},
     {"name": "ترف 22", "unit_id": "242211", "chalet_id": "173065", "type": "شقة_غرفتين",  "neighborhood": "الهدا", "nuzul_id": 49775, "nuzul_rate_plan": "9ee954f0-67d2-40f2-a111-f840461cd727"},
     {"name": "ترف 23", "unit_id": "243598", "chalet_id": "173065", "type": "شقة_غرفتين",  "neighborhood": "الهدا", "nuzul_id": 49776, "nuzul_rate_plan": "3b73cc07-a69e-4ddf-8941-200581ff199d"},
