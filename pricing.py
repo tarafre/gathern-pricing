@@ -20,16 +20,21 @@ def load_runtime_config():
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def save_history(today, now_str, data, apt_avg, std_avg, updated, total):
+def save_history(today, now_str, data_kharj, apt_avg, std_avg, updated, total, data_majma=None, apt_avg_mj=0, std_avg_mj=0):
     path = os.path.join(BASE_DIR, "data", "history.csv")
     is_new = not os.path.exists(path)
     with open(path, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if is_new:
-            w.writerow(["date","time","apt_avg","studio_avg","apt_count","studio_count","occ_apt","occ_studio","occ_all","updated","total"])
+            w.writerow(["date","time","apt_avg","studio_avg","apt_count","studio_count","occ_apt","occ_studio","occ_all","updated","total",
+                        "mj_apt_avg","mj_studio_avg","mj_apt_count","mj_studio_count","mj_occ_apt","mj_occ_studio","mj_occ_all"])
+        mj = data_majma or {}
         w.writerow([today, now_str, apt_avg, std_avg,
-                    len(data["all_apt"]), len(data["all_studio"]),
-                    data["occ_apt"], data["occ_studio"], data["occ_all"], updated, total])
+                    len(data_kharj["all_apt"]), len(data_kharj["all_studio"]),
+                    data_kharj["occ_apt"], data_kharj["occ_studio"], data_kharj["occ_all"], updated, total,
+                    apt_avg_mj, std_avg_mj,
+                    len(mj.get("all_apt",[])), len(mj.get("all_studio",[])),
+                    mj.get("occ_apt",0), mj.get("occ_studio",0), mj.get("occ_all",0)])
 
 from config import *
 
@@ -884,7 +889,8 @@ def main():
         else:
             err_rows.append(f"❌ {unit['name']} ← {status}")
 
-    save_history(today, now_str, data["kharj"], apt_avg, std_avg, updated_count, len(UNITS))
+    save_history(today, now_str, data["kharj"], apt_avg, std_avg, updated_count, len(UNITS),
+                 data_majma=data["majma"], apt_avg_mj=apt_avg_mj, std_avg_mj=std_avg_mj)
 
     # ── Airbnb (Playwright) — فقط لو فيه وحدات بـ airbnb_id ────────────────
     airbnb_units = [u for u in UNITS if u.get("airbnb_id") and not u.get("manual_only")]

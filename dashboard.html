@@ -248,7 +248,10 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
 </div>
 
 <div class="page" id="page-market">
+
+  <!-- الخرج -->
   <div class="card">
+    <div class="sec-lbl" style="font-size:13px;color:var(--accent);font-weight:700">📍 الخرج</div>
     <div class="sec-lbl">متوسط السعر — آخر 7 أيام</div>
     <div class="chart-wrap">
       <div class="chart-bars" id="chart-bars"></div>
@@ -260,12 +263,12 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
   </div>
 
   <div class="card">
-    <div class="sec-lbl">نسبة الإشغال — آخر 7 أيام</div>
+    <div class="sec-lbl">نسبة الإشغال — الخرج — آخر 7 أيام</div>
     <div id="occ-chart"></div>
   </div>
 
   <div class="card">
-    <div class="sec-lbl">ملخص الشهر</div>
+    <div class="sec-lbl">ملخص الشهر — الخرج</div>
     <div class="metrics">
       <div class="metric">
         <div class="metric-val" id="month-apt-avg" style="color:var(--accent)">—</div>
@@ -279,11 +282,42 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
     <div class="metrics">
       <div class="metric">
         <div class="metric-val" id="month-occ-apt">—%</div>
-        <div class="metric-lbl">متوسط إشغال الشقق</div>
+        <div class="metric-lbl">إشغال الشقق</div>
       </div>
       <div class="metric">
         <div class="metric-val" id="month-occ-std">—%</div>
-        <div class="metric-lbl">متوسط إشغال الاستديوهات</div>
+        <div class="metric-lbl">إشغال الاستديوهات</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- المجمعة -->
+  <div class="card">
+    <div class="sec-lbl" style="font-size:13px;color:#8b5cf6;font-weight:700">📍 المجمعة</div>
+    <div class="sec-lbl">متوسط السعر — آخر 7 أيام</div>
+    <div class="chart-wrap">
+      <div class="chart-bars" id="chart-bars-mj"></div>
+    </div>
+    <div class="chart-legend">
+      <span><span class="legend-dot" style="background:#8b5cf6"></span>شقق</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-lbl">نسبة الإشغال — المجمعة — آخر 7 أيام</div>
+    <div id="occ-chart-mj"></div>
+  </div>
+
+  <div class="card">
+    <div class="sec-lbl">ملخص الشهر — المجمعة</div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-val" id="mj-month-apt-avg" style="color:#8b5cf6">—</div>
+        <div class="metric-lbl">متوسط الشقق</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val" id="mj-month-occ">—%</div>
+        <div class="metric-lbl">متوسط الإشغال</div>
       </div>
     </div>
     <div class="status-bar" id="market-status">يتم تحميل البيانات...</div>
@@ -717,6 +751,7 @@ async function loadMarketData(){
     document.getElementById('apt-avg').textContent  = aptAvg;
     document.getElementById('std-avg').textContent  = stdAvg;
     // schema: date(0),time(1),apt_avg(2),studio_avg(3),apt_count(4),studio_count(5),occ_apt(6),occ_studio(7),occ_all(8),updated(9),total(10)
+    //         mj_apt_avg(11),mj_studio_avg(12),mj_apt_count(13),mj_studio_count(14),mj_occ_apt(15),mj_occ_studio(16),mj_occ_all(17)
     const aptCnt = parseInt(last[4])||0;
     const stdCnt = parseInt(last[5])||0;
     const occApt = parseInt(last[6])||0;
@@ -738,8 +773,10 @@ async function loadMarketData(){
 
     renderChart(days7);
     renderOccChart(days7);
+    renderChartMj(days7);
+    renderOccChartMj(days7);
 
-    // ملخص الشهر
+    // ملخص الشهر — الخرج
     const thisMonth = new Date().toISOString().slice(0,7);
     const monthRows = rows.filter(r=>r[0]&&r[0].startsWith(thisMonth));
     if(monthRows.length){
@@ -753,9 +790,18 @@ async function loadMarketData(){
       document.getElementById('month-occ-std').textContent = mOS+'%';
     }
 
+    // ملخص الشهر — المجمعة
+    const mjRows = monthRows.filter(r=>parseInt(r[11])>0);
+    if(mjRows.length){
+      const mjApt = Math.round(mjRows.reduce((s,r)=>s+(parseInt(r[11])||0),0)/mjRows.length);
+      const mjOA  = Math.round(mjRows.reduce((s,r)=>s+(parseInt(r[17])||0),0)/mjRows.length);
+      document.getElementById('mj-month-apt-avg').textContent = mjApt;
+      document.getElementById('mj-month-occ').textContent = mjOA+'%';
+    }
+
     setStatus('market-status', `آخر تحديث: ${last[0]} ${last[1]}`, 'ok');
   } catch(e){
-    setStatus('market-status', rows && rows.length===0 ? 'لا توجد بيانات بعد' : 'خطأ في تحميل البيانات','err');
+    setStatus('market-status', 'خطأ في تحميل البيانات','err');
   }
 }
 
@@ -784,6 +830,39 @@ function renderOccChart(days){
       <div class="occ-bar-bg"><div class="occ-bar-fill" style="width:${oAll}%;background:var(--text)"></div></div>
       <div class="occ-bar-bg"><div class="occ-bar-fill" style="width:${oa}%;background:var(--accent)"></div></div>
       <div class="occ-bar-bg"><div class="occ-bar-fill" style="width:${os}%;background:var(--amber)"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderChartMj(days){
+  const el = document.getElementById('chart-bars-mj');
+  if(!el) return;
+  const hasMj = days.some(r=>parseInt(r[11])>0);
+  if(!hasMj){ el.innerHTML='<div style="color:var(--sub);font-size:12px;padding:16px 0">لا توجد بيانات بعد — ستظهر بعد أول تشغيل</div>'; return; }
+  const maxVal = Math.max(...days.map(r=>parseInt(r[11])||0));
+  el.innerHTML = days.map(r=>{
+    const apt = parseInt(r[11])||0;
+    const aptH = maxVal ? Math.round((apt/maxVal)*100) : 0;
+    return `<div class="bar-col">
+      <div style="display:flex;gap:2px;align-items:flex-end;height:100px;width:100%">
+        <div class="bar" style="height:${aptH}%;flex:1;background:#8b5cf6"></div>
+      </div>
+      <div class="bar-lbl">${r[0]?r[0].slice(5):''}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderOccChartMj(days){
+  const el = document.getElementById('occ-chart-mj');
+  if(!el) return;
+  const hasMj = days.some(r=>parseInt(r[17])>0);
+  if(!hasMj){ el.innerHTML='<div style="color:var(--sub);font-size:12px;padding:8px 0">لا توجد بيانات بعد</div>'; return; }
+  el.innerHTML = days.map(r=>{
+    const oAll = parseInt(r[17])||0, oa = parseInt(r[15])||0;
+    return `<div style="margin-bottom:10px">
+      <div class="occ-row"><span>${r[0]?r[0].slice(5):''}</span><span>إجمالي ${oAll}% | شقق ${oa}%</span></div>
+      <div class="occ-bar-bg"><div class="occ-bar-fill" style="width:${oAll}%;background:#8b5cf6"></div></div>
+      <div class="occ-bar-bg"><div class="occ-bar-fill" style="width:${oa}%;background:#a78bfa"></div></div>
     </div>`;
   }).join('');
 }
