@@ -259,7 +259,7 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
 <div class="page" id="page-market">
 
   <!-- الخرج -->
-  <div class="card">
+  <div class="card" data-city="kharj">
     <div class="sec-lbl" style="font-size:13px;color:var(--accent);font-weight:700">📍 الخرج</div>
     <div class="sec-lbl">متوسط السعر — آخر 7 أيام</div>
     <div class="chart-wrap">
@@ -271,12 +271,12 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-city="kharj">
     <div class="sec-lbl">نسبة الإشغال — الخرج — آخر 7 أيام</div>
     <div id="occ-chart"></div>
   </div>
 
-  <div class="card">
+  <div class="card" data-city="kharj">
     <div class="sec-lbl">ملخص الشهر — الخرج</div>
     <div class="metrics">
       <div class="metric">
@@ -301,7 +301,7 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
   </div>
 
   <!-- المجمعة -->
-  <div class="card">
+  <div class="card" data-city="majma">
     <div class="sec-lbl" style="font-size:13px;color:#8b5cf6;font-weight:700">📍 المجمعة</div>
     <div class="sec-lbl">متوسط السعر — آخر 7 أيام</div>
     <div class="chart-wrap">
@@ -312,12 +312,12 @@ input[type=number].ti{width:60px;padding:7px 8px;border:0.5px solid var(--border
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-city="majma">
     <div class="sec-lbl">نسبة الإشغال — المجمعة — آخر 7 أيام</div>
     <div id="occ-chart-mj"></div>
   </div>
 
-  <div class="card">
+  <div class="card" data-city="majma">
     <div class="sec-lbl">ملخص الشهر — المجمعة</div>
     <div class="metrics">
       <div class="metric">
@@ -466,6 +466,9 @@ function switchCity(city, el){
   activeCity = city;
   document.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
+  document.querySelectorAll('[data-city]').forEach(card=>{
+    card.style.display = card.dataset.city === city ? '' : 'none';
+  });
   renderUnits();
 }
 let aptAvg = APT_AVG_DEFAULT, stdAvg = STD_AVG_DEFAULT;
@@ -935,6 +938,7 @@ const months=['يناير','فبراير','مارس','أبريل','مايو','ي
 const n=new Date();
 document.getElementById('date-lbl').textContent=`${days[n.getDay()]}، ${n.getDate()} ${months[n.getMonth()]}`;
 
+document.querySelectorAll('[data-city="majma"]').forEach(c=>c.style.display='none');
 renderUnits();
 renderSchedule();
 if(getToken()){ loadConfig(); loadMarketData(); }
